@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import serial, codecs, sys, binascii
+import serial, codecs, sys, binascii, time
 from pprint import pprint
 from struct import *
 
@@ -35,6 +35,30 @@ class Pebble(object):
 		resp = self._ser.read(size)
 		return (endpoint, resp)
 
+	def notification_sms(self, sender, body):
+		ts = str(int(time.time())*1000)
+		parts = [sender, body, ts]
+		data = "\x01"
+		for part in parts:
+			data += pack("!b", len(part))+part
+		self._send_message(3000, data)
+
+	def notification_email(self, sender, subject, body):
+		ts = str(int(time.time())*1000)
+		parts = [sender, subject, ts, body]
+		data = "\x00"
+		for part in parts:
+			data += pack("!b", len(part))+part
+		self._send_message(3000, data)	
+
+	def set_nowplaying_metadata(self, track, album, artist):
+		ts = str(int(time.time())*1000)
+		parts = [artist, album, track]
+		data = pack("!b", 16)
+		for part in parts:
+			data += pack("!b", len(part))+part
+		self._send_message(32, data)
+
 	def get_versions(self):
 		self._send_message(16, "\x00")
 		endpoint, resp = self._recv_message()
@@ -45,7 +69,7 @@ class Pebble(object):
 
 		apps = {}
 		endpoint, resp = self._recv_message()
-		apps["banks"], apps_installed = unpack("!II", resp[1:9])
+		restype, apps["banks"], apps_installed = unpack("!bII", resp[:9])
 		apps["apps"] = []
 
 		appinfo_size = 78
@@ -61,27 +85,38 @@ class Pebble(object):
 
 		return apps
 
+	def remove_app(self, appid, index):
+		data = pack("!bII", 2, appid, index)
+		self._send_message(6000, data)
+		endpoint, resp = self._recv_message()
+
 	def get_time(self):
 		self._send_message(11, "\x00")
 		endpoint, resp = self._recv_message()
-		timestamp = unpack("!L", resp[1:])
+		restype, timestamp = unpack("!bL", resp)
 		return timestamp
 
 	def set_time(self, timestamp):
 		data = pack("!bL", 2, timestamp)
 		self._send_message(11, data)
 
+	def ping(self, cookie = 0):
+		data = pack("!bL", 0, cookie)
+		self._send_message(2001, data)
+		endpoint, resp = self._recv_message()
+		restype, retcookie = unpack("!bL", resp)
+		return cookie == retcookie
+
 	def reset(self):
 		self._send_message(2003, "\x00")
 
 	def _version_response(self, data):
-		resp = {
-		}
-
 		fw_names = {
 			0: "normal_fw",
 			1: "recovery_fw"
 		}
+
+		resp = {}
 		for i in xrange(2):
 			fwver_size = 47
 			offset = i*fwver_size+1
@@ -109,6 +144,7 @@ class Pebble(object):
 if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
+	pebble.ping()
 
 	print "Pebble is running firmware version "+pebble.get_versions()["normal_fw"]["version"]
 	print "Installed apps:"
