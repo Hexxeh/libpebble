@@ -1,7 +1,7 @@
 libpebble
 =========
 
-Interact with your Pebble from any device.
+Interact with your Pebble from any device. Currently tested on OS X, should also work on Linux and Windows though. You'll need PySerial installed.
 
 
 Status
@@ -22,5 +22,5 @@ The following are currently supported:
 Thanks
 ------
 
-Pebble for making an awesome watch.
-Overv for helping me pick apart the Android different message factories in the Android app.
+* Pebble for making an awesome watch.
+* Overv for helping me pick apart the Android different message factories in the Android app.
