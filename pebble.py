@@ -37,9 +37,9 @@ class Pebble(object):
 		self._alive = True
 		self._endpoint_handlers = {}
 		self._internal_endpoint_handlers = {
-			11: self._get_time_response,
-			16: self._version_response,
-			6000: self._appbank_status_response
+			self.endpoints["TIME"]: self._get_time_response,
+			self.endpoints["VERSION"]: self._version_response,
+			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
 		try:
