@@ -12,6 +12,8 @@ Next, pair your Pebble to your computer and make sure it's setup as a serial por
 
 Once you're paired and the serial port is setup, try running pebble.py. You should get a notification on your Pebble to test that it works properly.
 
+Join #pebble on Freenode IRC to let me know how you get on and share your creations!
+
 Status
 ------
 
