@@ -15,6 +15,7 @@ The following are currently supported:
 * Sending notifications
 * Setting the currently playing track
 * Listing installed apps
+* Installing apps
 * Deleting apps
 * Getting the installed firmware versions
 * Getting device data (serial, BT MAC etc)
@@ -23,4 +24,5 @@ Thanks
 ------
 
 * Pebble for making an awesome watch.
+* RaYmAn for helping me figure out how the PutBytesClient worked.
 * Overv for helping me pick apart the Android different message factories in the Android app.

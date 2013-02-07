@@ -26,8 +26,15 @@ class Pebble(object):
 	endpoints = {
 		"TIME": 11,
 		"VERSION": 16,
+		"PHONE_VERSION": 17,
+		"SYSTEM_MESSAGE": 18,
 		"MUSIC_CONTROL": 32,
+		"PHONE_CONTROL": 33,
+		"LOGS": 2000,
 		"PING": 2001,
+		"LOG_DUMP": 2002,
+		"RESET": 2003,
+		"APP": 2004,
 		"NOTIFICATION": 3000,
 		"RESOURCE": 4000,
 		"APP_MANAGER": 6000,
@@ -44,7 +51,7 @@ class Pebble(object):
 		}
 
 		try:
-			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=5)
+			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=3)
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
 
@@ -178,9 +185,18 @@ class Pebble(object):
 
 		self._add_app(first_free)
 
-	def _add_app(self, index):
-		data = pack("!bI", 3, index)
-		self._send_message("APP_MANAGER", data)
+	"""
+		Valid commands:
+			FIRMWARE_AVAILABLE = 0
+			FIRMWARE_START = 1
+			FIRMWARE_COMPLETE = 2
+			FIRMWARE_FAIL = 3
+			FIRMWARE_UP_TO_DATE = 4
+			FIRMWARE_OUT_OF_DATE = 5
+	"""
+	def system_message(self, command):
+		data = pack("!bb", 0, command)
+		self._send_message("SYSTEM_MESSAGE", data)
 
 	def ping(self, cookie = 0):
 		data = pack("!bL", 0, cookie)
@@ -195,6 +211,10 @@ class Pebble(object):
 	def disconnect(self):
 		self._alive = False
 		self._ser.close()
+
+	def _add_app(self, index):
+		data = pack("!bI", 3, index)
+		self._send_message("APP_MANAGER", data)
 
 	def _get_time_response(self, endpoint, data):
 		restype, timestamp = unpack("!bL", data)
@@ -350,7 +370,7 @@ if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
 
-	pebble.notification_sms("OSX", "Hello, Pebble!")
+	#pebble.notification_sms("libpebble", "Hello, Pebble!")
 
 	#print "Installing app.pbz"
 	#pebble.install_app("app.pbz")
