@@ -1,7 +1,7 @@
 libpebble
 =========
 
-Interact with your Pebble from any device. Currently tested on OS X, should also work on Linux and Windows though. You'll need PySerial installed.
+Interact with your Pebble from any device.
 
 Getting started
 ---------------
