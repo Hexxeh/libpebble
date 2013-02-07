@@ -348,8 +348,8 @@ class PutBytesClient(object):
 		self._done = True
 
 	def abort(self):
-		# error handling? what error handling!
-		pass
+	    msgdata = pack("!bI", 4, self._token & 0xFFFFFFFF)
+	    self._pebble.send_message("PUTBYTES", msgdata)
 
 	def send(self):
 		datalen =  min(self._left, 2000)
