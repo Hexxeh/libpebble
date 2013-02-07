@@ -47,11 +47,12 @@ class Pebble(object):
 		self._internal_endpoint_handlers = {
 			self.endpoints["TIME"]: self._get_time_response,
 			self.endpoints["VERSION"]: self._version_response,
+			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
 		try:
-			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=3)
+			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=1)
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
 
@@ -72,8 +73,6 @@ class Pebble(object):
 			endpoint, resp = self._recv_message()
 			if resp == None:
 				continue
-
-			#print "got message for endpoint "+str(endpoint)
 
 			if endpoint in self._internal_endpoint_handlers:
 				resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
@@ -198,12 +197,12 @@ class Pebble(object):
 		data = pack("!bb", 0, command)
 		self._send_message("SYSTEM_MESSAGE", data)
 
-	def ping(self, cookie = 0):
+	def ping(self, cookie = 0, async = False):
 		data = pack("!bL", 0, cookie)
 		self._send_message("PING", data)
-		endpoint, resp = self._recv_message()
-		restype, retcookie = unpack("!bL", resp)
-		return cookie == retcookie
+		
+		if not async:
+			return EndpointSync(self, "PING").get_data()	
 
 	def reset(self):
 		self._send_message("RESET", "\x00")
@@ -215,6 +214,10 @@ class Pebble(object):
 	def _add_app(self, index):
 		data = pack("!bI", 3, index)
 		self._send_message("APP_MANAGER", data)
+
+	def _ping_response(self, endpoint, data):
+		restype, retcookie = unpack("!bL", data)
+		return retcookie
 
 	def _get_time_response(self, endpoint, data):
 		restype, timestamp = unpack("!bL", data)
@@ -370,10 +373,15 @@ if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
 
-	#pebble.notification_sms("libpebble", "Hello, Pebble!")
+	pebble.notification_sms("libpebble", "Hello, Pebble!")
 
-	#print "Installing app.pbz"
-	#pebble.install_app("app.pbz")
+	# install app.pbz
+	print "Installing app.pbz"
+	pebble.install_app("app.pbz")
+	
+	# delete all apps
+	#for app in pebble.get_appbank_status()["apps"]:
+	#	pebble.remove_app(app["id"], app["index"])
 
 	versions = pebble.get_versions()
 	curtime = pebble.get_time()
