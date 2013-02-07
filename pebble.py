@@ -5,22 +5,22 @@ from pprint import pprint
 from struct import *
 
 class EndpointSync():
-    timeout = 10
+	timeout = 10
 
-    def __init__(self, pebble, endpoint):
+	def __init__(self, pebble, endpoint):
 		pebble.register_endpoint(endpoint, self.callback)
 		self.marker = threading.Event()
 
-    def callback(self, *args):
-        self.data = args
-        self.marker.set()
+	def callback(self, *args):
+		self.data = args
+		self.marker.set()
 
-    def get_data(self):
-        try:
-            self.marker.wait(timeout=self.timeout)
-            return self.data[1]
-        except:
-            return False
+	def get_data(self):
+		try:
+			self.marker.wait(timeout=self.timeout)
+			return self.data[1]
+		except:
+			return False
 
 class Pebble(object):
 	endpoints = {
@@ -322,7 +322,7 @@ class PutBytesClient(object):
 			self.send() 
 		else:
 			self._state = self.states["COMMIT"]
-			self.commit()	       
+			self.commit()		   
 
 	def commit(self):
 		data = pack("!bII", 3, self._token & 0xFFFFFFFF, stm32_crc.crc32(self._buffer))
@@ -348,15 +348,15 @@ class PutBytesClient(object):
 		self._done = True
 
 	def abort(self):
-	    msgdata = pack("!bI", 4, self._token & 0xFFFFFFFF)
-	    self._pebble.send_message("PUTBYTES", msgdata)
+		msgdata = pack("!bI", 4, self._token & 0xFFFFFFFF)
+		self._pebble.send_message("PUTBYTES", msgdata)
 
 	def send(self):
 		datalen =  min(self._left, 2000)
 		rg = len(self._buffer)-self._left
 		msgdata = pack("!bII", 2, self._token & 0xFFFFFFFF, datalen)
 		msgdata += self._buffer[rg:rg+datalen]
-		self._pebble._send_message("PUTBYTES", msgdata)       
+		self._pebble._send_message("PUTBYTES", msgdata)	   
 		self._left -= datalen
 
 	def handle_message(self, endpoint, resp):
