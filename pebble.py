@@ -376,8 +376,8 @@ if __name__ == '__main__':
 	pebble.notification_sms("libpebble", "Hello, Pebble!")
 
 	# install app.pbz
-	print "Installing app.pbz"
-	pebble.install_app("app.pbz")
+	#print "Installing app.pbz"
+	#pebble.install_app("app.pbz")
 	
 	# delete all apps
 	#for app in pebble.get_appbank_status()["apps"]:
