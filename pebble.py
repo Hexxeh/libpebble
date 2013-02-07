@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import serial, codecs, sys, binascii, time, threading
+import serial, codecs, sys, binascii, time, threading, stm32_crc, zipfile
 from pprint import pprint
 from struct import *
 
@@ -30,7 +30,8 @@ class Pebble(object):
 		"PING": 2001,
 		"NOTIFICATION": 3000,
 		"RESOURCE": 4000,
-		"APP_MANAGER": 6000
+		"APP_MANAGER": 6000,
+		"PUTBYTES": 48879
 	}
 
 	def __init__(self, id):
@@ -43,7 +44,7 @@ class Pebble(object):
 		}
 
 		try:
-			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=1)
+			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=5)
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
 
@@ -65,6 +66,8 @@ class Pebble(object):
 			if resp == None:
 				continue
 
+			#print "got message for endpoint "+str(endpoint)
+
 			if endpoint in self._internal_endpoint_handlers:
 				resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
@@ -72,7 +75,7 @@ class Pebble(object):
 				self._endpoint_handlers[endpoint](endpoint, resp)
 
 	def _build_message(self, endpoint, data):
-		return pack("!hh", len(data), endpoint)+data
+		return pack("!HH", len(data), endpoint)+data
 
 	def _send_message(self, endpoint, data, callback = None):
 		if endpoint not in self.endpoints:
@@ -87,7 +90,7 @@ class Pebble(object):
 			return (None, None)
 		elif len(data) < 4:
 			raise Exception("Malformed response with length "+str(len(data)))
-		size, endpoint = unpack("!hh", data)
+		size, endpoint = unpack("!HH", data)
 		resp = self._ser.read(size)
 		return (endpoint, resp)
 
@@ -148,6 +151,37 @@ class Pebble(object):
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
+	def install_app(self, pbz_path):
+		with zipfile.ZipFile(pbz_path) as pbz:
+			binary = pbz.read("pebble-app.bin")
+			resources = pbz.read("app_resources.pbpack")
+
+		apps = self.get_appbank_status()
+		first_free = 1
+		for app in apps["apps"]:
+			if app["index"] == first_free:
+				first_free += 1
+		if first_free == apps["banks"]:
+			raise Exception("No available app banks left")
+
+		client = PutBytesClient(self, first_free, "BINARY", binary)
+		self.register_endpoint("PUTBYTES", client.handle_message)
+		client.init()
+		while not client._done:
+			pass
+
+		client = PutBytesClient(self, first_free, "RESOURCES", resources)
+		self.register_endpoint("PUTBYTES", client.handle_message)
+		client.init()
+		while not client._done:
+			pass
+
+		self._add_app(first_free)
+
+	def _add_app(self, index):
+		data = pack("!bI", 3, index)
+		self._send_message("APP_MANAGER", data)
+
 	def ping(self, cookie = 0):
 		data = pack("!bL", 0, cookie)
 		self._send_message("PING", data)
@@ -168,21 +202,24 @@ class Pebble(object):
 
 	def _appbank_status_response(self, endpoint, data):
 		apps = {}
-		restype, apps["banks"], apps_installed = unpack("!bII", data[:9])
-		apps["apps"] = []
+		restype, = unpack("!b", data[0])
 
-		appinfo_size = 78
-		offset = 9
-		for i in xrange(apps_installed):
-			app = {}
-			app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
-				unpack("!II32s32sIH", data[offset:offset+appinfo_size])
-			app["name"] = app["name"].replace("\x00", "")
-			app["company"] = app["company"].replace("\x00", "")
-			apps["apps"] += [app]
-			offset += appinfo_size
+		if restype == 1:
+			apps["banks"], apps_installed = unpack("!II", data[1:9])
+			apps["apps"] = []
 
-		return apps
+			appinfo_size = 78
+			offset = 9
+			for i in xrange(apps_installed):
+				app = {}
+				app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
+					unpack("!II32s32sIH", data[offset:offset+appinfo_size])
+				app["name"] = app["name"].replace("\x00", "")
+				app["company"] = app["company"].replace("\x00", "")
+				apps["apps"] += [app]
+				offset += appinfo_size
+
+			return apps
 
 	def _version_response(self, endpoint, data):
 		fw_names = {
@@ -215,9 +252,108 @@ class Pebble(object):
 
 		return resp
 
+class PutBytesClient(object):
+	states = {
+		"NOT_STARTED": 0,
+		"WAIT_FOR_TOKEN": 1,
+		"IN_PROGRESS": 2,
+		"COMMIT": 3,
+		"COMPLETE": 4,
+		"FAILED": 5
+	}
+
+	transfer_types = {
+		"RESOURCES": 4,
+		"BINARY": 5
+	}
+
+	def __init__(self, pebble, index, transfer_type, buffer):
+		self._pebble = pebble
+		self._state = self.states["NOT_STARTED"]
+		self._transfer_type = self.transfer_types[transfer_type]
+		self._buffer = buffer
+		self._index = index
+		self._done = False
+
+	def init(self):
+		data = pack("!bIbb", 1, len(self._buffer), self._transfer_type, self._index)
+		self._pebble._send_message("PUTBYTES", data)
+		self._state = self.states["WAIT_FOR_TOKEN"]
+
+	def wait_for_token(self, resp):
+		res, = unpack("!b", resp[0])
+		if res != 1:
+			self.abort()
+			return
+		self._token, = unpack("!I", resp[1:])
+		self._left = len(self._buffer)
+		self._state = self.states["IN_PROGRESS"]
+		self.send()
+
+	def in_progress(self, resp):
+		res, = unpack("!b", resp[0])
+		if res != 1:
+			self.abort()
+			return
+		if self._left > 0:
+			self.send() 
+		else:
+			self._state = self.states["COMMIT"]
+			self.commit()	       
+
+	def commit(self):
+		data = pack("!bII", 3, self._token & 0xFFFFFFFF, stm32_crc.crc32(self._buffer))
+		self._pebble._send_message("PUTBYTES", data)
+
+	def handle_commit(self, resp):
+		res, = unpack("!b", resp[0])
+		if res != 1:
+			self.abort()
+			return
+		self._state = self.states["COMPLETE"]
+		self.complete()
+
+	def complete(self):
+		data = pack("!bI", 5, self._token & 0xFFFFFFFF)
+		self._pebble._send_message("PUTBYTES", data)
+
+	def handle_complete(self, resp):
+		res, = unpack("!b", resp[0])
+		if res != 1:
+			self.abort()
+			return
+		self._done = True
+
+	def abort(self):
+		# error handling? what error handling!
+		pass
+
+	def send(self):
+		datalen =  min(self._left, 2000)
+		rg = len(self._buffer)-self._left
+		msgdata = pack("!bII", 2, self._token & 0xFFFFFFFF, datalen)
+		msgdata += self._buffer[rg:rg+datalen]
+		self._pebble._send_message("PUTBYTES", msgdata)       
+		self._left -= datalen
+
+	def handle_message(self, endpoint, resp):
+		if self._state == self.states["WAIT_FOR_TOKEN"]:
+			self.wait_for_token(resp)
+		elif self._state == self.states["IN_PROGRESS"]:
+			self.in_progress(resp)
+		elif self._state == self.states["COMMIT"]:
+			self.handle_commit(resp)
+		elif self._state == self.states["COMPLETE"]:
+			self.handle_complete(resp)
+
 if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
+
+	pebble.notification_sms("OSX", "Hello, Pebble!")
+
+	#print "Installing app.pbz"
+	#pebble.install_app("app.pbz")
 
 	versions = pebble.get_versions()
 	curtime = pebble.get_time()
