@@ -47,6 +47,7 @@ class Pebble(object):
 		self._internal_endpoint_handlers = {
 			self.endpoints["TIME"]: self._get_time_response,
 			self.endpoints["VERSION"]: self._version_response,
+			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
@@ -73,6 +74,8 @@ class Pebble(object):
 			endpoint, resp = self._recv_message()
 			if resp == None:
 				continue
+
+			print "got message for endpoint "+str(endpoint)+" of length "+str(len(resp))
 
 			if endpoint in self._internal_endpoint_handlers:
 				resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
@@ -173,28 +176,63 @@ class Pebble(object):
 		client = PutBytesClient(self, first_free, "BINARY", binary)
 		self.register_endpoint("PUTBYTES", client.handle_message)
 		client.init()
-		while not client._done:
+		while not client._done and not client._error:
 			pass
+		if client._error:
+			raise Exception("Failed to send application binary")
 
 		client = PutBytesClient(self, first_free, "RESOURCES", resources)
 		self.register_endpoint("PUTBYTES", client.handle_message)
 		client.init()
-		while not client._done:
+		while not client._done and not client._error:
 			pass
+		if client._error:
+			raise Exception("Failed to send application resources")
 
 		self._add_app(first_free)
 
-	"""
-		Valid commands:
-			FIRMWARE_AVAILABLE = 0
-			FIRMWARE_START = 1
-			FIRMWARE_COMPLETE = 2
-			FIRMWARE_FAIL = 3
-			FIRMWARE_UP_TO_DATE = 4
-			FIRMWARE_OUT_OF_DATE = 5
-	"""
+
+	def install_firmware(self, pbz_path, recovery=False):
+		resources = None
+		with zipfile.ZipFile(pbz_path) as pbz:
+			binary = pbz.read("tintin_fw.bin")
+			if not recovery:
+				resources = pbz.read("system_resources.pbpack")
+
+		self.system_message("FIRMWARE_START")
+		if resources:
+			client = PutBytesClient(self, 0, "SYS_RESOURCES", binary)
+			self.register_endpoint("PUTBYTES", client.handle_message)
+			client.init()
+			while not client._done and not client._error:
+				pass
+			if client._error:
+				raise Exception("Failed to send firmware resources")
+
+
+		client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", resources)
+		self.register_endpoint("PUTBYTES", client.handle_message)
+		client.init()
+		while not client._done and not client._error:
+			pass
+		if client._error:
+			raise Exception("Failed to send firmware binary")
+
+		self.system_message("FIRMWARE_COMPLETE")
+
+
 	def system_message(self, command):
-		data = pack("!bb", 0, command)
+		commands = {
+			"FIRMWARE_AVAILABLE": 0,
+			"FIRMWARE_START": 1,
+			"FIRMWARE_COMPLETE": 2,
+			"FIRMWARE_FAIL": 3,
+			"FIRMWARE_UP_TO_DATE": 4,
+			"FIRMWARE_OUT_OF_DATE": 5
+		}
+		if command not in commands:
+			raise Exception("Invalid command")
+		data = pack("!bb", 0, commands[command])
 		self._send_message("SYSTEM_MESSAGE", data)
 
 	def ping(self, cookie = 0, async = False):
@@ -222,6 +260,28 @@ class Pebble(object):
 	def _get_time_response(self, endpoint, data):
 		restype, timestamp = unpack("!bL", data)
 		return timestamp
+
+	def _system_message_response(self, endpoint, data):
+		print len(data)
+		print data
+
+	def _log_response(self, endpoint, data):
+		timestamp, level, msgsize, linenumber = unpack(resp, "!Ibbh")
+		filename = getstringFromBuffer(resp[8:24])
+		message = getStringFromBuffer(resp[24:24+msgsize])
+
+		log_levels = {
+			0: "*",
+			1: "E",
+			50: "W",
+			100: "I",
+			200: "D",
+			250: "V"
+		}
+
+		level = log_levels[level] if level in log_levels else "?"
+
+		print timestamp, level, filename, linenumber, message
 
 	def _appbank_status_response(self, endpoint, data):
 		apps = {}
@@ -286,6 +346,9 @@ class PutBytesClient(object):
 	}
 
 	transfer_types = {
+		"FIRMWARE": 1,
+		"RECOVERY": 2,
+		"SYS_RESOURCES": 3,
 		"RESOURCES": 4,
 		"BINARY": 5
 	}
@@ -297,6 +360,7 @@ class PutBytesClient(object):
 		self._buffer = buffer
 		self._index = index
 		self._done = False
+		self._error = False
 
 	def init(self):
 		data = pack("!bIbb", 1, len(self._buffer), self._transfer_type, self._index)
@@ -306,7 +370,9 @@ class PutBytesClient(object):
 	def wait_for_token(self, resp):
 		res, = unpack("!b", resp[0])
 		if res != 1:
-			self.abort()
+			print "init failed!"
+			print res
+			self._error = True
 			return
 		self._token, = unpack("!I", resp[1:])
 		self._left = len(self._buffer)
@@ -350,6 +416,7 @@ class PutBytesClient(object):
 	def abort(self):
 		msgdata = pack("!bI", 4, self._token & 0xFFFFFFFF)
 		self._pebble.send_message("PUTBYTES", msgdata)
+		self._error = True
 
 	def send(self):
 		datalen =  min(self._left, 2000)
@@ -372,6 +439,8 @@ class PutBytesClient(object):
 if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
+
+	#pebble.install_firmware("fw.pbz")
 
 	pebble.notification_sms("libpebble", "Hello, Pebble!")
 
