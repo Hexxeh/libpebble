@@ -48,12 +48,13 @@ class Pebble(object):
 			self.endpoints["TIME"]: self._get_time_response,
 			self.endpoints["VERSION"]: self._version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
+			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
 		try:
-			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 19200, timeout=1)
+			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 115200, timeout=2)
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
 
@@ -70,18 +71,22 @@ class Pebble(object):
 			pass
 
 	def _reader(self):
-		while self._alive:
-			endpoint, resp = self._recv_message()
-			if resp == None:
-				continue
+		try:
+			while self._alive:
+				endpoint, resp = self._recv_message()
+				if resp == None:
+					continue
 
-			print "got message for endpoint "+str(endpoint)+" of length "+str(len(resp))
+				#print "got message for endpoint "+str(endpoint)+" of length "+str(len(resp))
 
-			if endpoint in self._internal_endpoint_handlers:
-				resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
+				if endpoint in self._internal_endpoint_handlers:
+					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
-			if endpoint in self._endpoint_handlers:
-				self._endpoint_handlers[endpoint](endpoint, resp)
+				if endpoint in self._endpoint_handlers:
+					self._endpoint_handlers[endpoint](endpoint, resp)
+		except:
+			raise Exception("Lost connection to Pebble")
+			self._alive = False
 
 	def _build_message(self, endpoint, data):
 		return pack("!HH", len(data), endpoint)+data
@@ -201,7 +206,7 @@ class Pebble(object):
 
 		self.system_message("FIRMWARE_START")
 		if resources:
-			client = PutBytesClient(self, 0, "SYS_RESOURCES", binary)
+			client = PutBytesClient(self, 0, "SYS_RESOURCES", resources)
 			self.register_endpoint("PUTBYTES", client.handle_message)
 			client.init()
 			while not client._done and not client._error:
@@ -210,7 +215,7 @@ class Pebble(object):
 				raise Exception("Failed to send firmware resources")
 
 
-		client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", resources)
+		client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", binary)
 		self.register_endpoint("PUTBYTES", client.handle_message)
 		client.init()
 		while not client._done and not client._error:
@@ -262,11 +267,11 @@ class Pebble(object):
 		return timestamp
 
 	def _system_message_response(self, endpoint, data):
-		print len(data)
-		print data
+		print "got system message"
+		print unpack("!bb", data)
 
 	def _log_response(self, endpoint, data):
-		timestamp, level, msgsize, linenumber = unpack(resp, "!Ibbh")
+		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data)
 		filename = getstringFromBuffer(resp[8:24])
 		message = getStringFromBuffer(resp[24:24+msgsize])
 
@@ -385,10 +390,11 @@ class PutBytesClient(object):
 			self.abort()
 			return
 		if self._left > 0:
-			self.send() 
+			self.send()
+			#print "sent "+str(len(self._buffer)-self._left)+" of "+str(len(self._buffer))+" bytes"
 		else:
 			self._state = self.states["COMMIT"]
-			self.commit()		   
+			self.commit()	   
 
 	def commit(self):
 		data = pack("!bII", 3, self._token & 0xFFFFFFFF, stm32_crc.crc32(self._buffer))
@@ -440,9 +446,12 @@ if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
 
-	#pebble.install_firmware("fw.pbz")
+	#pebble.notification_sms("libpebble", "Hello, Pebble!")
 
-	pebble.notification_sms("libpebble", "Hello, Pebble!")
+	# insatll fw.pbz
+	# firmware upload can be VERY slow
+	# patches to fix this are welcome
+	#pebble.install_firmware("fw.pbz")
 
 	# install app.pbz
 	#print "Installing app.pbz"
@@ -451,6 +460,8 @@ if __name__ == '__main__':
 	# delete all apps
 	#for app in pebble.get_appbank_status()["apps"]:
 	#	pebble.remove_app(app["id"], app["index"])
+
+	#pebble.reset()
 
 	versions = pebble.get_versions()
 	curtime = pebble.get_time()
@@ -464,3 +475,5 @@ if __name__ == '__main__':
 	print "Installed apps:"
 	for app in apps["apps"]:
 		print " - "+app["name"]
+
+	#pebble.reset()
