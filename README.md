@@ -28,6 +28,7 @@ The following are currently supported:
 * Installing apps
 * Deleting apps
 * Getting the installed firmware versions
+* Installing firmware
 * Getting device data (serial, BT MAC etc)
 
 Thanks
