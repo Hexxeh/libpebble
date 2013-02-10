@@ -14,6 +14,22 @@ Once you're paired and the serial port is setup, try running pebble.py. You shou
 
 Join #pebble on Freenode IRC to let me know how you get on and share your creations!
 
+###Linux Notes
+
+**Please note the following was tested on Linux Mint 13, but should be valid for any Debian based distro**
+
+ * Install rfcomm `sudo apt-get install rfcomm`
+ * Bind the device `sudo rfcomm bind 0 PEBBLE_BLUETOOTH_ADDRESS 1`
+ * make the following code changes:
+
+    self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 115200, timeout=2)
+
+to: 
+
+    self._ser = serial.Serial("/dev/rfcomm0", 115200, timeout=2)
+
+You can run the application as normal now.  You may have to run it as root with `sudo python pebble.py`
+
 Status
 ------
 
@@ -30,6 +46,15 @@ The following are currently supported:
 * Getting the installed firmware versions
 * Installing firmware
 * Getting device data (serial, BT MAC etc)
+
+REPL
+----
+
+A basic REPL is available, it is best used with ipython:
+
+    `sudo ipython repl.py`
+
+The variable pebble refers the watch connection.  You can for example do `pebble.ping()` to perform a ping.
 
 Thanks
 ------
