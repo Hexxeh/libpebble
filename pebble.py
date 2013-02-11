@@ -165,6 +165,13 @@ class Pebble(object):
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
+	def reinstall_app(self, name, pbz_path):
+		apps = self.get_appbank_status()
+		for app in apps["apps"]:
+			if app["name"] == name:
+				self.remove_app(app["id"], app["index"])
+		self.install_app(pbz_path)
+
 	def install_app(self, pbz_path):
 		with zipfile.ZipFile(pbz_path) as pbz:
 			binary = pbz.read("pebble-app.bin")
