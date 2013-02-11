@@ -20,7 +20,9 @@ Join #pebble on Freenode IRC to let me know how you get on and share your creati
 
  * Install rfcomm `sudo apt-get install rfcomm`
  * Bind the device `sudo rfcomm bind 0 PEBBLE_BLUETOOTH_ADDRESS 1`
- * make the following code changes:
+ * make the following code change:
+
+Change:
 
     self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 115200, timeout=2)
 
