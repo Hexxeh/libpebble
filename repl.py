@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import argparse
 import pebble as libpebble
 import code
