@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 
-import serial, codecs, sys, binascii, time, threading, stm32_crc, zipfile
-from pprint import pprint
-from struct import *
+import binascii
+import serial
+import stm32_crc
+import sys
+import threading
+import time
+import traceback
+import zipfile
+from struct import pack, unpack
+
 
 class EndpointSync():
 	timeout = 10
@@ -22,7 +29,14 @@ class EndpointSync():
 		except:
 			return False
 
+
 class Pebble(object):
+
+	"""
+	A connection to a Pebble watch; data and commands may be sent
+	to the watch through an instance of this class.
+	"""
+
 	endpoints = {
 		"TIME": 11,
 		"VERSION": 16,
@@ -85,6 +99,7 @@ class Pebble(object):
 				if endpoint in self._endpoint_handlers:
 					self._endpoint_handlers[endpoint](endpoint, resp)
 		except:
+			traceback.print_exc()
 			raise Exception("Lost connection to Pebble")
 			self._alive = False
 
@@ -111,11 +126,14 @@ class Pebble(object):
 	def register_endpoint(self, endpoint_name, func):
 		if endpoint_name not in self.endpoints:
 			raise Exception("Invalid endpoint specified")
-		
+
 		endpoint = self.endpoints[endpoint_name]
 		self._endpoint_handlers[endpoint] = func
 
 	def notification_sms(self, sender, body):
+
+		"""Send a 'SMS Notification' to the displayed on the watch."""
+
 		ts = str(int(time.time())*1000)
 		parts = [sender, body, ts]
 		data = "\x01"
@@ -124,15 +142,20 @@ class Pebble(object):
 		self._send_message("NOTIFICATION", data)
 
 	def notification_email(self, sender, subject, body):
+
+		"""Send an 'Email Notification' to the displayed on the watch."""
+
 		ts = str(int(time.time())*1000)
 		parts = [sender, subject, ts, body]
 		data = "\x00"
 		for part in parts:
 			data += pack("!b", len(part))+part
-		self._send_message("NOTIFICATION", data)	
+		self._send_message("NOTIFICATION", data)
 
 	def set_nowplaying_metadata(self, track, album, artist):
-		ts = str(int(time.time())*1000)
+
+		"""Update the song metadata displayed in Pebble's music app."""
+
 		parts = [artist, album, track]
 		data = pack("!b", 16)
 		for part in parts:
@@ -140,32 +163,61 @@ class Pebble(object):
 		self._send_message("MUSIC_CONTROL", data)
 
 	def get_versions(self, async = False):
+
+		"""
+		Retrieve a summary of version information for various software
+		(firmware, bootloader, etc) running on the watch.
+		"""
+
 		self._send_message("VERSION", "\x00")
 
 		if not async:
 			return EndpointSync(self, "VERSION").get_data()
 
 	def get_appbank_status(self, async = False):
+
+		"""
+		Retrieve a list of all installed watch-apps.
+
+		This is particularly useful when trying to locate a
+		free app-bank to use when installing a new watch-app.
+		"""
+
 		self._send_message("APP_MANAGER", "\x01")
 
 		if not async:
 			return EndpointSync(self, "APP_MANAGER").get_data()
 
 	def remove_app(self, appid, index):
+
+		"""Remove an installed application from the target app-bank."""
+
 		data = pack("!bII", 2, appid, index)
 		self._send_message("APP_MANAGER", data)
 
 	def get_time(self, async = False):
+
+		"""Retrieve the time from the Pebble's RTC."""
+
 		self._send_message("TIME", "\x00")
 
 		if not async:
 			return EndpointSync(self, "TIME").get_data()
 
 	def set_time(self, timestamp):
+
+		"""Set the time stored in the target Pebble's RTC."""
+
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
 	def reinstall_app(self, name, pbz_path):
+
+		"""
+		A convenience method to uninstall and install an app.
+
+		This will only work if the app hasn't changed names between the new and old versions.
+		"""
 		apps = self.get_appbank_status()
 		for app in apps["apps"]:
 			if app["name"] == name:
@@ -173,6 +225,13 @@ class Pebble(object):
 		self.install_app(pbz_path)
 
 	def install_app(self, pbz_path):
+
+		"""
+		Install an app bundle (*.pbw) to the target Pebble.
+
+		This will pick the first free app-bank available.
+		"""
+
 		with zipfile.ZipFile(pbz_path) as pbz:
 			binary = pbz.read("pebble-app.bin")
 			resources = pbz.read("app_resources.pbpack")
@@ -205,6 +264,9 @@ class Pebble(object):
 
 
 	def install_firmware(self, pbz_path, recovery=False):
+
+		"""Install a firmware bundle to the target watch."""
+
 		resources = None
 		with zipfile.ZipFile(pbz_path) as pbz:
 			binary = pbz.read("tintin_fw.bin")
@@ -234,6 +296,13 @@ class Pebble(object):
 
 
 	def system_message(self, command):
+
+		"""
+		Send a 'system message' to the watch.
+
+		These messages are used to signal important events/state-changes to the watch firmware.
+		"""
+
 		commands = {
 			"FIRMWARE_AVAILABLE": 0,
 			"FIRMWARE_START": 1,
@@ -248,16 +317,25 @@ class Pebble(object):
 		self._send_message("SYSTEM_MESSAGE", data)
 
 	def ping(self, cookie = 0, async = False):
+
+		"""Send a 'ping' to the watch to test connectivity."""
+
 		data = pack("!bL", 0, cookie)
 		self._send_message("PING", data)
-		
+
 		if not async:
-			return EndpointSync(self, "PING").get_data()	
+			return EndpointSync(self, "PING").get_data()
 
 	def reset(self):
+
+		"""Reset the watch remotely."""
+
 		self._send_message("RESET", "\x00")
 
 	def disconnect(self):
+
+		"""Disconnect from the target Pebble."""
+
 		self._alive = False
 		self._ser.close()
 
@@ -278,9 +356,13 @@ class Pebble(object):
 		print unpack("!bb", data)
 
 	def _log_response(self, endpoint, data):
-		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data)
-		filename = getstringFromBuffer(resp[8:24])
-		message = getStringFromBuffer(resp[24:24+msgsize])
+		if (len(data) < 8):
+			print 'Unable to decode log message'
+			return;
+
+		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data[:8])
+		filename = data[8:24].decode('utf-8')
+		message = data[24:24+msgsize].decode('utf-8')
 
 		log_levels = {
 			0: "*",
@@ -339,7 +421,7 @@ class Pebble(object):
 
 		resp["bootloader_timestamp"],resp["hw_version"],resp["serial"] = \
 			unpack("!L9s12s", data[95:120])
-		
+
 		resp["hw_version"] = resp["hw_version"].replace("\x00","")
 
 		btmac_hex = binascii.hexlify(data[120:126])
@@ -401,7 +483,7 @@ class PutBytesClient(object):
 			#print "sent "+str(len(self._buffer)-self._left)+" of "+str(len(self._buffer))+" bytes"
 		else:
 			self._state = self.states["COMMIT"]
-			self.commit()	   
+			self.commit()
 
 	def commit(self):
 		data = pack("!bII", 3, self._token & 0xFFFFFFFF, stm32_crc.crc32(self._buffer))
@@ -436,7 +518,7 @@ class PutBytesClient(object):
 		rg = len(self._buffer)-self._left
 		msgdata = pack("!bII", 2, self._token & 0xFFFFFFFF, datalen)
 		msgdata += self._buffer[rg:rg+datalen]
-		self._pebble._send_message("PUTBYTES", msgdata)	   
+		self._pebble._send_message("PUTBYTES", msgdata)
 		self._left -= datalen
 
 	def handle_message(self, endpoint, resp):
@@ -453,23 +535,6 @@ if __name__ == '__main__':
 	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
 	pebble = Pebble(pebble_id)
 
-	#pebble.notification_sms("libpebble", "Hello, Pebble!")
-
-	# insatll fw.pbz
-	# firmware upload can be VERY slow
-	# patches to fix this are welcome
-	#pebble.install_firmware("fw.pbz")
-
-	# install app.pbz
-	#print "Installing app.pbz"
-	#pebble.install_app("app.pbz")
-	
-	# delete all apps
-	#for app in pebble.get_appbank_status()["apps"]:
-	#	pebble.remove_app(app["id"], app["index"])
-
-	#pebble.reset()
-
 	versions = pebble.get_versions()
 	curtime = pebble.get_time()
 	apps = pebble.get_appbank_status()
@@ -482,5 +547,3 @@ if __name__ == '__main__':
 	print "Installed apps:"
 	for app in apps["apps"]:
 		print " - "+app["name"]
-
-	#pebble.reset()
