@@ -9,7 +9,16 @@ import time
 import traceback
 import zipfile
 from struct import pack, unpack
+import os
+import glob
+import logging
 
+log = logging.getLogger()
+logging.basicConfig(format='[%(levelname)-8s] %(message)s')
+log.setLevel(logging.DEBUG)
+
+#DEFAULT_PEBBLE_ID = "402F"
+DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 
 class EndpointSync():
 	timeout = 10
@@ -29,6 +38,13 @@ class EndpointSync():
 		except:
 			return False
 
+class PebbleError(Exception):
+	 def __init__(self, id, message):
+		self._id = id
+		self._message = message
+
+	 def __str__(self):
+		return "%s (ID:%s)" % (self._message, self._id)
 
 class Pebble(object):
 
@@ -55,7 +71,27 @@ class Pebble(object):
 		"PUTBYTES": 48879
 	}
 
+	@staticmethod
+	def AutodetectDevice():
+		if os.name != "posix": #i.e. Windows
+			raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
+		
+		pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
+		
+		if len(pebbles) == 0:
+			raise PebbleError(None, "Autodetection could not find any Pebble devices")
+		elif len(pebbles) > 1:
+			log.warn("Autodetect found %d Pebbles; using most recent" % len(pebbles))
+			#NOTE: Not entirely sure if this is the correct approach
+			pebbles.sort(key=lambda x: os.stat(x).st_mtime, reverse=True)
+		
+		id = pebbles[0][15:19]
+		log.info("Autodetect found a Pebble with ID %s" % id)
+		return id
+
 	def __init__(self, id):
+		if id is None:
+			id = Pebble.AutodetectDevice()
 		self._alive = True
 		self._endpoint_handlers = {}
 		self._internal_endpoint_handlers = {
@@ -532,7 +568,15 @@ class PutBytesClient(object):
 			self.handle_complete(resp)
 
 if __name__ == '__main__':
-	pebble_id = sys.argv[1] if len(sys.argv) > 1 else "402F"
+	if DEFAULT_PEBBLE_ID is not None:
+		log.debug("Default Pebble ID is %s" % DEFAULT_PEBBLE_ID)
+	else:
+		log.debug("No default Pebble ID, using autodetection if available")
+	
+	if len(sys.argv) > 1:
+		pebble_id = sys.argv[1]
+	else:
+		pebble_id = DEFAULT_PEBBLE_ID
 	pebble = Pebble(pebble_id)
 
 	versions = pebble.get_versions()
