@@ -104,15 +104,19 @@ class Pebble(object):
 		}
 
 		try:
-			self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 115200, timeout=2)
+			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
+			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
+			self._ser = serial.Serial(devicefile, 115200, timeout=2)
+			log.debug("Connected, discarding null response")
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
-
+			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
 			self._read_thread.setDaemon(True)
 			self._read_thread.start()
+			log.debug("Reader thread loaded")
 		except:
-			raise Exception("Failed to connect to Pebble")
+			raise PebbleError(id, "Failed to connect to Pebble")
 
 	def __del__(self):
 		try:
@@ -127,7 +131,7 @@ class Pebble(object):
 				if resp == None:
 					continue
 
-				#print "got message for endpoint "+str(endpoint)+" of length "+str(len(resp))
+				log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
 
 				if endpoint in self._internal_endpoint_handlers:
 					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
@@ -136,7 +140,7 @@ class Pebble(object):
 					self._endpoint_handlers[endpoint](endpoint, resp)
 		except:
 			traceback.print_exc()
-			raise Exception("Lost connection to Pebble")
+			raise PebbleError(self._id, "Lost connection to Pebble")
 			self._alive = False
 
 	def _build_message(self, endpoint, data):
@@ -144,7 +148,7 @@ class Pebble(object):
 
 	def _send_message(self, endpoint, data, callback = None):
 		if endpoint not in self.endpoints:
-			raise Exception("Invalid endpoint specified")
+			raise PebbleError(self._id, "Invalid endpoint specified")
 
 		msg = self._build_message(self.endpoints[endpoint], data)
 		self._ser.write(msg)
@@ -154,14 +158,14 @@ class Pebble(object):
 		if len(data) == 0:
 			return (None, None)
 		elif len(data) < 4:
-			raise Exception("Malformed response with length "+str(len(data)))
+			raise PebbleError(self._id, "Malformed response with length "+str(len(data)))
 		size, endpoint = unpack("!HH", data)
 		resp = self._ser.read(size)
 		return (endpoint, resp)
 
 	def register_endpoint(self, endpoint_name, func):
 		if endpoint_name not in self.endpoints:
-			raise Exception("Invalid endpoint specified")
+			raise PebbleError(self._id, "Invalid endpoint specified")
 
 		endpoint = self.endpoints[endpoint_name]
 		self._endpoint_handlers[endpoint] = func
@@ -278,7 +282,8 @@ class Pebble(object):
 			if app["index"] == first_free:
 				first_free += 1
 		if first_free == apps["banks"]:
-			raise Exception("No available app banks left")
+			raise PebbleError(self._id, "All %d app banks are full" % apps["banks"])
+		log.debug("Attempting to add app to bank %d of %d" % (first_free, apps["banks"]))
 
 		client = PutBytesClient(self, first_free, "BINARY", binary)
 		self.register_endpoint("PUTBYTES", client.handle_message)
@@ -286,7 +291,7 @@ class Pebble(object):
 		while not client._done and not client._error:
 			pass
 		if client._error:
-			raise Exception("Failed to send application binary")
+			raise PebbleError(self._id, "Failed to send application binary %s/pebble-app.bin" % pbz_path)
 
 		client = PutBytesClient(self, first_free, "RESOURCES", resources)
 		self.register_endpoint("PUTBYTES", client.handle_message)
@@ -294,7 +299,7 @@ class Pebble(object):
 		while not client._done and not client._error:
 			pass
 		if client._error:
-			raise Exception("Failed to send application resources")
+			raise PebbleError(self._id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
 
 		self._add_app(first_free)
 
@@ -317,7 +322,7 @@ class Pebble(object):
 			while not client._done and not client._error:
 				pass
 			if client._error:
-				raise Exception("Failed to send firmware resources")
+				raise PebbleError(self._id, "Failed to send firmware resources %s/system_resources.pbpack" % pbz_path)
 
 
 		client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", binary)
@@ -326,7 +331,7 @@ class Pebble(object):
 		while not client._done and not client._error:
 			pass
 		if client._error:
-			raise Exception("Failed to send firmware binary")
+			raise PebbleError(self._id, "Failed to send firmware binary %s/tintin_fw.bin" % pbz_path)
 
 		self.system_message("FIRMWARE_COMPLETE")
 
@@ -348,8 +353,9 @@ class Pebble(object):
 			"FIRMWARE_OUT_OF_DATE": 5
 		}
 		if command not in commands:
-			raise Exception("Invalid command")
+			raise PebbleError(self._id, "Invalid command \"%s\"" % command)
 		data = pack("!bb", 0, commands[command])
+		log.debug("Sending command %s (code %d)" % (command, commands[command]))
 		self._send_message("SYSTEM_MESSAGE", data)
 
 	def ping(self, cookie = 0, async = False):
@@ -388,12 +394,11 @@ class Pebble(object):
 		return timestamp
 
 	def _system_message_response(self, endpoint, data):
-		print "got system message"
-		print unpack("!bb", data)
+		log.info("Got system message %s" % repr(unpack('!bb', data)))
 
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
-			print 'Unable to decode log message'
+			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
 			return;
 
 		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data[:8])
@@ -500,8 +505,7 @@ class PutBytesClient(object):
 	def wait_for_token(self, resp):
 		res, = unpack("!b", resp[0])
 		if res != 1:
-			print "init failed!"
-			print res
+			log.error("init failed with code %d" % res)
 			self._error = True
 			return
 		self._token, = unpack("!I", resp[1:])
@@ -516,7 +520,7 @@ class PutBytesClient(object):
 			return
 		if self._left > 0:
 			self.send()
-			#print "sent "+str(len(self._buffer)-self._left)+" of "+str(len(self._buffer))+" bytes"
+			log.debug("Sent %d of %d bytes" % (len(self._buffer)-self._left, len(self._buffer)))
 		else:
 			self._state = self.states["COMMIT"]
 			self.commit()
