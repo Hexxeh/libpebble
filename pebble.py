@@ -350,7 +350,9 @@ class Pebble(object):
 			"FIRMWARE_COMPLETE": 2,
 			"FIRMWARE_FAIL": 3,
 			"FIRMWARE_UP_TO_DATE": 4,
-			"FIRMWARE_OUT_OF_DATE": 5
+			"FIRMWARE_OUT_OF_DATE": 5,
+			"BLUETOOTH_START_DISCOVERABLE": 6,
+			"BLUETOOTH_END_DISCOVERABLE": 7
 		}
 		if command not in commands:
 			raise PebbleError(self._id, "Invalid command \"%s\"" % command)
