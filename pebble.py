@@ -92,6 +92,7 @@ class Pebble(object):
 	def __init__(self, id):
 		if id is None:
 			id = Pebble.AutodetectDevice()
+		self.id = id
 		self._alive = True
 		self._endpoint_handlers = {}
 		self._internal_endpoint_handlers = {
@@ -589,7 +590,7 @@ if __name__ == '__main__':
 	curtime = pebble.get_time()
 	apps = pebble.get_appbank_status()
 
-	print "Pebble "+pebble_id
+	print "Pebble "+pebble.id
 	print "Firmware "+versions["normal_fw"]["version"]
 	print "Recovery "+versions["recovery_fw"]["version"]
 	print "Timestamp: "+str(curtime)
