@@ -12,6 +12,7 @@ from struct import pack, unpack
 import os
 import glob
 import logging
+import json
 
 log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
@@ -19,6 +20,59 @@ log.setLevel(logging.DEBUG)
 
 #DEFAULT_PEBBLE_ID = "402F"
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
+
+class PebbleBundle(object):
+        MANIFEST_FILENAME = 'manifest.json'
+
+        def __init__(self, bundle_path):
+                bundle_abs_path = os.path.abspath(bundle_path)
+                if not os.path.exists(bundle_abs_path):
+                        raise "Bundle does not exist: " + bundle_path
+
+                self.zip = zipfile.ZipFile(bundle_abs_path)
+                self.path = bundle_abs_path
+                self.manifest = None
+
+        def get_manifest(self):
+                if (self.manifest):
+                        return self.manifest
+
+                if self.MANIFEST_FILENAME not in self.zip.namelist():
+                        raise "Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME)
+
+                self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
+                return self.manifest
+
+        def close(self):
+                self.zip.close()
+
+        def is_firmware_bundle(self):
+                return 'firmware' in self.get_manifest()
+
+        def is_app_bundle(self):
+                return 'application' in self.get_manifest()
+
+        def has_resources(self):
+                return 'resources' in self.get_manifest()
+
+        def get_firmware_info(self):
+                if not self.is_firmware_bundle():
+                        return None
+
+                return self.get_manifest()['firmware']
+
+        def get_application_info(self):
+                if not self.is_app_bundle():
+                        return None
+
+                return self.get_manifest()['application']
+
+        def get_resources_info(self):
+                if not self.has_resources():
+                        return None
+
+                return self.get_manifest()['resources']
+
 
 class EndpointSync():
 	timeout = 10
@@ -75,16 +129,16 @@ class Pebble(object):
 	def AutodetectDevice():
 		if os.name != "posix": #i.e. Windows
 			raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
-		
+
 		pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
-		
+
 		if len(pebbles) == 0:
 			raise PebbleError(None, "Autodetection could not find any Pebble devices")
 		elif len(pebbles) > 1:
 			log.warn("Autodetect found %d Pebbles; using most recent" % len(pebbles))
 			#NOTE: Not entirely sure if this is the correct approach
 			pebbles.sort(key=lambda x: os.stat(x).st_mtime, reverse=True)
-		
+
 		id = pebbles[0][15:19]
 		log.info("Autodetect found a Pebble with ID %s" % id)
 		return id
@@ -273,9 +327,17 @@ class Pebble(object):
 		This will pick the first free app-bank available.
 		"""
 
-		with zipfile.ZipFile(pbz_path) as pbz:
-			binary = pbz.read("pebble-app.bin")
-			resources = pbz.read("app_resources.pbpack")
+                bundle = PebbleBundle(pbz_path)
+                if not bundle.is_app_bundle():
+                        raise PebbleError(self._id, "This is not an app bundle")
+
+                binary = bundle.zip.read(
+                        bundle.get_application_info()['name'])
+                if bundle.has_resources():
+                        resources = bundle.zip.read(
+                                bundle.get_resources_info()['name'])
+                else:
+                        resources = None
 
 		apps = self.get_appbank_status()
 		first_free = 1
@@ -294,13 +356,14 @@ class Pebble(object):
 		if client._error:
 			raise PebbleError(self._id, "Failed to send application binary %s/pebble-app.bin" % pbz_path)
 
-		client = PutBytesClient(self, first_free, "RESOURCES", resources)
-		self.register_endpoint("PUTBYTES", client.handle_message)
-		client.init()
-		while not client._done and not client._error:
-			pass
-		if client._error:
-			raise PebbleError(self._id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
+                if resources:
+                        client = PutBytesClient(self, first_free, "RESOURCES", resources)
+                        self.register_endpoint("PUTBYTES", client.handle_message)
+                        client.init()
+                        while not client._done and not client._error:
+                                pass
+                        if client._error:
+                                raise PebbleError(self._id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
 
 		self._add_app(first_free)
 
@@ -579,7 +642,7 @@ if __name__ == '__main__':
 		log.debug("Default Pebble ID is %s" % DEFAULT_PEBBLE_ID)
 	else:
 		log.debug("No default Pebble ID, using autodetection if available")
-	
+
 	if len(sys.argv) > 1:
 		pebble_id = sys.argv[1]
 	else:
