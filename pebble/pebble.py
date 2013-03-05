@@ -195,7 +195,7 @@ class Pebble(object):
 					self._endpoint_handlers[endpoint](endpoint, resp)
 		except:
 			traceback.print_exc()
-			raise PebbleError(self._id, "Lost connection to Pebble")
+			raise PebbleError(self.id, "Lost connection to Pebble")
 			self._alive = False
 
 	def _build_message(self, endpoint, data):
@@ -203,7 +203,7 @@ class Pebble(object):
 
 	def _send_message(self, endpoint, data, callback = None):
 		if endpoint not in self.endpoints:
-			raise PebbleError(self._id, "Invalid endpoint specified")
+			raise PebbleError(self.id, "Invalid endpoint specified")
 
 		msg = self._build_message(self.endpoints[endpoint], data)
 		self._ser.write(msg)
@@ -213,14 +213,14 @@ class Pebble(object):
 		if len(data) == 0:
 			return (None, None)
 		elif len(data) < 4:
-			raise PebbleError(self._id, "Malformed response with length "+str(len(data)))
+			raise PebbleError(self.id, "Malformed response with length "+str(len(data)))
 		size, endpoint = unpack("!HH", data)
 		resp = self._ser.read(size)
 		return (endpoint, resp)
 
 	def register_endpoint(self, endpoint_name, func):
 		if endpoint_name not in self.endpoints:
-			raise PebbleError(self._id, "Invalid endpoint specified")
+			raise PebbleError(self.id, "Invalid endpoint specified")
 
 		endpoint = self.endpoints[endpoint_name]
 		self._endpoint_handlers[endpoint] = func
@@ -329,7 +329,7 @@ class Pebble(object):
 
                 bundle = PebbleBundle(pbz_path)
                 if not bundle.is_app_bundle():
-                        raise PebbleError(self._id, "This is not an app bundle")
+                        raise PebbleError(self.id, "This is not an app bundle")
 
                 binary = bundle.zip.read(
                         bundle.get_application_info()['name'])
@@ -345,7 +345,7 @@ class Pebble(object):
 			if app["index"] == first_free:
 				first_free += 1
 		if first_free == apps["banks"]:
-			raise PebbleError(self._id, "All %d app banks are full" % apps["banks"])
+			raise PebbleError(self.id, "All %d app banks are full" % apps["banks"])
 		log.debug("Attempting to add app to bank %d of %d" % (first_free, apps["banks"]))
 
 		client = PutBytesClient(self, first_free, "BINARY", binary)
@@ -354,7 +354,7 @@ class Pebble(object):
 		while not client._done and not client._error:
 			pass
 		if client._error:
-			raise PebbleError(self._id, "Failed to send application binary %s/pebble-app.bin" % pbz_path)
+			raise PebbleError(self.id, "Failed to send application binary %s/pebble-app.bin" % pbz_path)
 
                 if resources:
                         client = PutBytesClient(self, first_free, "RESOURCES", resources)
@@ -363,7 +363,7 @@ class Pebble(object):
                         while not client._done and not client._error:
                                 pass
                         if client._error:
-                                raise PebbleError(self._id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
+                                raise PebbleError(self.id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
 
 		self._add_app(first_free)
 
@@ -386,7 +386,7 @@ class Pebble(object):
 			while not client._done and not client._error:
 				pass
 			if client._error:
-				raise PebbleError(self._id, "Failed to send firmware resources %s/system_resources.pbpack" % pbz_path)
+				raise PebbleError(self.id, "Failed to send firmware resources %s/system_resources.pbpack" % pbz_path)
 
 
 		client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", binary)
@@ -395,7 +395,7 @@ class Pebble(object):
 		while not client._done and not client._error:
 			pass
 		if client._error:
-			raise PebbleError(self._id, "Failed to send firmware binary %s/tintin_fw.bin" % pbz_path)
+			raise PebbleError(self.id, "Failed to send firmware binary %s/tintin_fw.bin" % pbz_path)
 
 		self.system_message("FIRMWARE_COMPLETE")
 
@@ -419,7 +419,7 @@ class Pebble(object):
 			"BLUETOOTH_END_DISCOVERABLE": 7
 		}
 		if command not in commands:
-			raise PebbleError(self._id, "Invalid command \"%s\"" % command)
+			raise PebbleError(self.id, "Invalid command \"%s\"" % command)
 		data = pack("!bb", 0, commands[command])
 		log.debug("Sending command %s (code %d)" % (command, commands[command]))
 		self._send_message("SYSTEM_MESSAGE", data)
