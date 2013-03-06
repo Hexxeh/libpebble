@@ -5,11 +5,16 @@ import pebble as libpebble
 import sys
 import time
 
+MAX_ATTEMPTS = 5
+
 def cmd_ping(pebble, args):
     pebble.ping(cookie=0xDEADBEEF)
 
 def cmd_load(pebble, args):
-    pebble.install_app(args.watch_app)
+    pebble.install_app(args.app_bundle)
+
+def cmd_load_fw(pebble, args):
+    pebble.install_firmware(args.fw_bundle)
 
 def cmd_logcat(pebble, args):
     print 'Listening for logs...'
@@ -32,36 +37,45 @@ def cmd_rm_app(pebble, args):
             return
 
 def main():
-    add_pbl_id_arg = lambda x: x.add_argument('pebble_id', metavar='PEBBLE_ID', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
-
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
+    parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
 
     subparsers = parser.add_subparsers(help='commands', dest='which')
 
     ping_parser = subparsers.add_parser('ping', help='send a ping message')
-    add_pbl_id_arg(ping_parser)
     ping_parser.set_defaults(func=cmd_ping)
 
     load_parser = subparsers.add_parser('load', help='load an app onto a connected watch')
-    add_pbl_id_arg(load_parser)
-    load_parser.add_argument('watch_app', metavar='FILE', type=str, help='a compiled app bundle')
+    load_parser.add_argument('app_bundle', metavar='FILE', type=str, help='a compiled app bundle')
     load_parser.set_defaults(func=cmd_load)
 
+    load_fw_parser = subparsers.add_parser('load_fw', help='load new firmware onto a connected watch')
+    load_fw_parser.add_argument('fw_bundle', metavar='FILE', type=str, help='a compiled app bundle')
+    load_fw_parser.set_defaults(func=cmd_load_fw)
+
     logcat_parser = subparsers.add_parser('logcat', help='view logs sent from the connected watch')
-    add_pbl_id_arg(logcat_parser)
     logcat_parser.set_defaults(func=cmd_logcat)
 
     list_apps_parser = subparsers.add_parser('list', help='list installed apps')
-    add_pbl_id_arg(list_apps_parser)
     list_apps_parser.set_defaults(func=cmd_list_apps)
 
     rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
-    add_pbl_id_arg(rm_app_parser)
     rm_app_parser.add_argument('app_index', metavar='IDX', type=int, help='the app index to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
 
     args = parser.parse_args()
-    pebble = libpebble.Pebble(args.pebble_id)
+
+    attempts = 0
+    while True:
+        if attempts > MAX_ATTEMPTS:
+            raise 'Could not connect to Pebble'
+        try:
+            pebble = libpebble.Pebble(args.pebble_id)
+            break
+        except PebbleError:
+            time.sleep(5)
+            attempts += 1
+
     args.func(pebble, args)
 
 if __name__ == '__main__':
