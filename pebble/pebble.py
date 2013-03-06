@@ -21,6 +21,8 @@ log.setLevel(logging.DEBUG)
 #DEFAULT_PEBBLE_ID = "402F"
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 
+DEBUG_PROTOCOL = False
+
 class PebbleBundle(object):
         MANIFEST_FILENAME = 'manifest.json'
 
@@ -188,6 +190,9 @@ class Pebble(object):
 
 				log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
 
+                                if DEBUG_PROTOCOL:
+                                        log.debug('<<< ' + resp.encode('hex'))
+
 				if endpoint in self._internal_endpoint_handlers:
 					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
@@ -206,6 +211,9 @@ class Pebble(object):
 			raise PebbleError(self.id, "Invalid endpoint specified")
 
 		msg = self._build_message(self.endpoints[endpoint], data)
+
+                if DEBUG_PROTOCOL:
+                        log.debug('>>> ' + msg.encode('hex'))
 		self._ser.write(msg)
 
 	def _recv_message(self):
@@ -379,6 +387,8 @@ class Pebble(object):
 				resources = pbz.read("system_resources.pbpack")
 
 		self.system_message("FIRMWARE_START")
+                time.sleep(2)
+
 		if resources:
 			client = PutBytesClient(self, 0, "SYS_RESOURCES", resources)
 			self.register_endpoint("PUTBYTES", client.handle_message)
@@ -460,8 +470,10 @@ class Pebble(object):
 		return timestamp
 
 	def _system_message_response(self, endpoint, data):
-		log.info("Got system message %s" % repr(unpack('!bb', data)))
-
+                if len(data) == 2:
+                        log.info("Got system message %s" % repr(unpack('!bb', data)))
+                else:
+                        log.info("Got 'unknown' system message...")
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))

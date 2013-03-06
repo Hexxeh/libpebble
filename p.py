@@ -15,9 +15,12 @@ def cmd_load(pebble, args):
 
 def cmd_load_fw(pebble, args):
     pebble.install_firmware(args.fw_bundle)
+    time.sleep(5)
+    print 'resetting to apply firmware update...'
+    pebble.reset()
 
 def cmd_logcat(pebble, args):
-    print 'Listening for logs...'
+    print 'listening for logs...'
     try:
         while True:
             time.sleep(1)
@@ -33,7 +36,7 @@ def cmd_rm_app(pebble, args):
         if app['index'] == args.app_index:
             pebble.remove_app(app["id"], app["index"])
 
-            print 'Removed app'
+            print 'removed app'
             return
 
 def main():
@@ -72,7 +75,7 @@ def main():
         try:
             pebble = libpebble.Pebble(args.pebble_id)
             break
-        except PebbleError:
+        except libpebble.PebbleError:
             time.sleep(5)
             attempts += 1
 
