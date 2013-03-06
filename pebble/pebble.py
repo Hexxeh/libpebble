@@ -164,6 +164,8 @@ class Pebble(object):
 			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=2)
+                        self._ser.flushInput()
+                        self._ser.flushOutput()
 			log.debug("Connected, discarding null response")
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
@@ -188,9 +190,8 @@ class Pebble(object):
 				if resp == None:
 					continue
 
-				log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
-
                                 if DEBUG_PROTOCOL:
+                                        log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
                                         log.debug('<<< ' + resp.encode('hex'))
 
 				if endpoint in self._internal_endpoint_handlers:
