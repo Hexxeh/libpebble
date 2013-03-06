@@ -23,56 +23,56 @@ DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 DEBUG_PROTOCOL = False
 
 class PebbleBundle(object):
-        MANIFEST_FILENAME = 'manifest.json'
+	MANIFEST_FILENAME = 'manifest.json'
 
-        def __init__(self, bundle_path):
-                bundle_abs_path = os.path.abspath(bundle_path)
-                if not os.path.exists(bundle_abs_path):
-                        raise "Bundle does not exist: " + bundle_path
+	def __init__(self, bundle_path):
+		bundle_abs_path = os.path.abspath(bundle_path)
+		if not os.path.exists(bundle_abs_path):
+			raise "Bundle does not exist: " + bundle_path
 
-                self.zip = zipfile.ZipFile(bundle_abs_path)
-                self.path = bundle_abs_path
-                self.manifest = None
+		self.zip = zipfile.ZipFile(bundle_abs_path)
+		self.path = bundle_abs_path
+		self.manifest = None
 
-        def get_manifest(self):
-                if (self.manifest):
-                        return self.manifest
+	def get_manifest(self):
+		if (self.manifest):
+			return self.manifest
 
-                if self.MANIFEST_FILENAME not in self.zip.namelist():
-                        raise "Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME)
+		if self.MANIFEST_FILENAME not in self.zip.namelist():
+			raise "Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME)
 
-                self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
-                return self.manifest
+		self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
+		return self.manifest
 
-        def close(self):
-                self.zip.close()
+	def close(self):
+		self.zip.close()
 
-        def is_firmware_bundle(self):
-                return 'firmware' in self.get_manifest()
+	def is_firmware_bundle(self):
+		return 'firmware' in self.get_manifest()
 
-        def is_app_bundle(self):
-                return 'application' in self.get_manifest()
+	def is_app_bundle(self):
+		return 'application' in self.get_manifest()
 
-        def has_resources(self):
-                return 'resources' in self.get_manifest()
+	def has_resources(self):
+		return 'resources' in self.get_manifest()
 
-        def get_firmware_info(self):
-                if not self.is_firmware_bundle():
-                        return None
+	def get_firmware_info(self):
+		if not self.is_firmware_bundle():
+			return None
 
-                return self.get_manifest()['firmware']
+		return self.get_manifest()['firmware']
 
-        def get_application_info(self):
-                if not self.is_app_bundle():
-                        return None
+	def get_application_info(self):
+		if not self.is_app_bundle():
+			return None
 
-                return self.get_manifest()['application']
+		return self.get_manifest()['application']
 
-        def get_resources_info(self):
-                if not self.has_resources():
-                        return None
+	def get_resources_info(self):
+		if not self.has_resources():
+			return None
 
-                return self.get_manifest()['resources']
+		return self.get_manifest()['resources']
 
 
 class EndpointSync():
@@ -168,9 +168,9 @@ class Pebble(object):
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
 
-                        # Eat any cruft that might be sitting in the serial buffer...
-                        while self._ser.read():
-                                pass
+			# Eat any cruft that might be sitting in the serial buffer...
+			while self._ser.read():
+				pass
 
 			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
@@ -193,9 +193,9 @@ class Pebble(object):
 				if resp == None:
 					continue
 
-                                if DEBUG_PROTOCOL:
-                                        log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
-                                        log.debug('<<< ' + resp.encode('hex'))
+				if DEBUG_PROTOCOL:
+					log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
+					log.debug('<<< ' + resp.encode('hex'))
 
 				if endpoint in self._internal_endpoint_handlers:
 					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
@@ -216,8 +216,8 @@ class Pebble(object):
 
 		msg = self._build_message(self.endpoints[endpoint], data)
 
-                if DEBUG_PROTOCOL:
-                        log.debug('>>> ' + msg.encode('hex'))
+		if DEBUG_PROTOCOL:
+			log.debug('>>> ' + msg.encode('hex'))
 		self._ser.write(msg)
 
 	def _recv_message(self):
@@ -339,22 +339,22 @@ class Pebble(object):
 		This will pick the first free app-bank available.
 		"""
 
-                bundle = PebbleBundle(pbz_path)
-                if not bundle.is_app_bundle():
-                        raise PebbleError(self.id, "This is not an app bundle")
+		bundle = PebbleBundle(pbz_path)
+		if not bundle.is_app_bundle():
+			raise PebbleError(self.id, "This is not an app bundle")
 
-                binary = bundle.zip.read(
-                        bundle.get_application_info()['name'])
-                if bundle.has_resources():
-                        resources = bundle.zip.read(
-                                bundle.get_resources_info()['name'])
-                else:
-                        resources = None
+		binary = bundle.zip.read(
+			bundle.get_application_info()['name'])
+		if bundle.has_resources():
+			resources = bundle.zip.read(
+				bundle.get_resources_info()['name'])
+		else:
+			resources = None
 
 		apps = self.get_appbank_status()
 
-                if not apps:
-                        raise PebbleError(self.id, "could not obtain app list; try again")
+		if not apps:
+			raise PebbleError(self.id, "could not obtain app list; try again")
 
 		first_free = 1
 		for app in apps["apps"]:
@@ -372,18 +372,18 @@ class Pebble(object):
 		if client._error:
 			raise PebbleError(self.id, "Failed to send application binary %s/pebble-app.bin" % pbz_path)
 
-                if resources:
-                        client = PutBytesClient(self, first_free, "RESOURCES", resources)
-                        self.register_endpoint("PUTBYTES", client.handle_message)
-                        client.init()
-                        while not client._done and not client._error:
-                                pass
-                        if client._error:
-                                raise PebbleError(self.id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
+		if resources:
+			client = PutBytesClient(self, first_free, "RESOURCES", resources)
+			self.register_endpoint("PUTBYTES", client.handle_message)
+			client.init()
+			while not client._done and not client._error:
+				pass
+			if client._error:
+				raise PebbleError(self.id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
 
-                time.sleep(2)
+		time.sleep(2)
 		self._add_app(first_free)
-                time.sleep(2)
+		time.sleep(2)
 
 
 	def install_firmware(self, pbz_path, recovery=False):
@@ -397,7 +397,7 @@ class Pebble(object):
 				resources = pbz.read("system_resources.pbpack")
 
 		self.system_message("FIRMWARE_START")
-                time.sleep(2)
+		time.sleep(2)
 
 		if resources:
 			client = PutBytesClient(self, 0, "SYS_RESOURCES", resources)
@@ -480,10 +480,10 @@ class Pebble(object):
 		return timestamp
 
 	def _system_message_response(self, endpoint, data):
-                if len(data) == 2:
-                        log.info("Got system message %s" % repr(unpack('!bb', data)))
-                else:
-                        log.info("Got 'unknown' system message...")
+		if len(data) == 2:
+			log.info("Got system message %s" % repr(unpack('!bb', data)))
+		else:
+			log.info("Got 'unknown' system message...")
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
