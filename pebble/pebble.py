@@ -163,12 +163,16 @@ class Pebble(object):
 		try:
 			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
-			self._ser = serial.Serial(devicefile, 115200, timeout=2)
-                        self._ser.flushInput()
-                        self._ser.flushOutput()
+			self._ser = serial.Serial(devicefile, 115200, timeout=1)
+
 			log.debug("Connected, discarding null response")
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
+
+                        # Eat any cruft that might be sitting in the serial buffer...
+                        while self._ser.read():
+                                pass
+
 			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
 			self._read_thread.setDaemon(True)
@@ -349,6 +353,10 @@ class Pebble(object):
                         resources = None
 
 		apps = self.get_appbank_status()
+
+                if not apps:
+                        raise PebbleError(self.id, "could not obtain app list; try again")
+
 		first_free = 1
 		for app in apps["apps"]:
 			if app["index"] == first_free:
