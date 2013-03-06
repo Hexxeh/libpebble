@@ -657,28 +657,3 @@ class PutBytesClient(object):
 			self.handle_commit(resp)
 		elif self._state == self.states["COMPLETE"]:
 			self.handle_complete(resp)
-
-if __name__ == '__main__':
-	if DEFAULT_PEBBLE_ID is not None:
-		log.debug("Default Pebble ID is %s" % DEFAULT_PEBBLE_ID)
-	else:
-		log.debug("No default Pebble ID, using autodetection if available")
-
-	if len(sys.argv) > 1:
-		pebble_id = sys.argv[1]
-	else:
-		pebble_id = DEFAULT_PEBBLE_ID
-	pebble = Pebble(pebble_id)
-
-	versions = pebble.get_versions()
-	curtime = pebble.get_time()
-	apps = pebble.get_appbank_status()
-
-	print "Pebble "+pebble.id
-	print "Firmware "+versions["normal_fw"]["version"]
-	print "Recovery "+versions["recovery_fw"]["version"]
-	print "Timestamp: "+str(curtime)
-
-	print "Installed apps:"
-	for app in apps["apps"]:
-		print " - "+app["name"]
