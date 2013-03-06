@@ -18,7 +18,6 @@ log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
-#DEFAULT_PEBBLE_ID = "402F"
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 
 DEBUG_PROTOCOL = False
