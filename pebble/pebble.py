@@ -381,7 +381,9 @@ class Pebble(object):
                         if client._error:
                                 raise PebbleError(self.id, "Failed to send application resources %s/app_resources.pbpack" % pbz_path)
 
+                time.sleep(2)
 		self._add_app(first_free)
+                time.sleep(2)
 
 
 	def install_firmware(self, pbz_path, recovery=False):
