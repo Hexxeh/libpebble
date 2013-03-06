@@ -14,11 +14,26 @@ import glob
 import logging
 import json
 
+from serial.tools import list_ports
+
+# chose an implementation, depending on os
+if os.name == 'nt':
+    from serial.tools.list_ports_windows import *
+elif os.name == 'posix':
+    from serial.tools.list_ports_posix import *
+else:
+    raise ImportError("Sorry: no implementation for your platform ('%s') available" % (os.name,))
+
+def grep(regexp):
+    for port, desc, hwid in comports():
+        if re.search(regexp, port, re.I) or re.search(regexp, desc) or re.search(regexp, hwid):
+            yield port, desc, hwid
+
 log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
-DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
+DEFAULT_PEBBLE_ID = None #Triggers autodetection
 
 DEBUG_PROTOCOL = False
 
@@ -94,11 +109,11 @@ class EndpointSync():
 			return False
 
 class PebbleError(Exception):
-	 def __init__(self, id, message):
+	def __init__(self, id, message):
 		self._id = id
 		self._message = message
 
-	 def __str__(self):
+	def __str__(self):
 		return "%s (ID:%s)" % (self._message, self._id)
 
 class Pebble(object):
@@ -128,25 +143,30 @@ class Pebble(object):
 
 	@staticmethod
 	def AutodetectDevice():
-		if os.name != "posix": #i.e. Windows
-			raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
-
-		pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
-
-		if len(pebbles) == 0:
-			raise PebbleError(None, "Autodetection could not find any Pebble devices")
-		elif len(pebbles) > 1:
-			log.warn("Autodetect found %d Pebbles; using most recent" % len(pebbles))
-			#NOTE: Not entirely sure if this is the correct approach
-			pebbles.sort(key=lambda x: os.stat(x).st_mtime, reverse=True)
-
-		id = pebbles[0][15:19]
-		log.info("Autodetect found a Pebble with ID %s" % id)
+		if os.name == "posix": 
+			pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
+			if len(pebbles) == 0:
+				raise PebbleError(None, "Autodetection could not find any Pebble devices")
+			elif len(pebbles) > 1:
+				log.warn("Autodetect found %d Pebbles; using most recent" % len(pebbles))
+				#NOTE: Not entirely sure if this is the correct approach
+				pebbles.sort(key=lambda x: os.stat(x).st_mtime, reverse=True)   
+				id = pebbles[0][15:19]
+		elif os.name == "nt":
+			iterator = sorted(grep("0001005e")) #VID&0001005e_PID&0001
+			id = iterator[0][0]
+			log.info("Autodetect found a Pebble at port %s" % id)
 		return id
 
-	def __init__(self, id):
-		if id is None:
-			id = Pebble.AutodetectDevice()
+	def __init__(self, id):		
+		if os.name == "posix": 
+			if id is None:
+				id = Pebble.AutodetectDevice()
+			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
+		elif os.name == "nt":
+			if id is None:
+				id = "AUTO"
+			devicefile = Pebble.AutodetectDevice() #returns COM port number
 		self.id = id
 		self._alive = True
 		self._endpoint_handlers = {}
@@ -160,7 +180,7 @@ class Pebble(object):
 		}
 
 		try:
-			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
+
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=1)
 
