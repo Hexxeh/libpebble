@@ -39,6 +39,21 @@ def cmd_rm_app(pebble, args):
             print 'removed app'
             return
 
+def cmd_reset(pebble, args):
+    pebble.reset()
+
+def cmd_notification_email(pebble, args):
+    pebble.notification_email(args.sender, args.subject, args.body)
+
+def cmd_notification_sms(pebble, args):
+    pebble.notification_sms(args.sender, args.body)
+
+def cmd_get_time(pebble, args):
+    print pebble.get_time()
+
+def cmd_set_time(pebble, args):
+    pebble.set_time(args.timestamp)
+
 def main():
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
     parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
@@ -56,7 +71,7 @@ def main():
     load_fw_parser.add_argument('fw_bundle', metavar='FILE', type=str, help='a compiled app bundle')
     load_fw_parser.set_defaults(func=cmd_load_fw)
 
-    logcat_parser = subparsers.add_parser('logcat', help='view logs sent from the connected watch')
+    logcat_parser = subparsers.add_parser('logcat', help='view logs sent from a connected watch')
     logcat_parser.set_defaults(func=cmd_logcat)
 
     list_apps_parser = subparsers.add_parser('list', help='list installed apps')
@@ -65,6 +80,27 @@ def main():
     rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
     rm_app_parser.add_argument('app_index', metavar='IDX', type=int, help='the app index to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
+
+    reset_parser = subparsers.add_parser('reset', help='reset the watch remotely')
+    reset_parser.set_defaults(func=cmd_reset)
+
+    notification_email_parser = subparsers.add_parser('email', help='send an "Email Notification"')
+    notification_email_parser.add_argument('sender', type=str)
+    notification_email_parser.add_argument('subject', type=str)
+    notification_email_parser.add_argument('body', type=str)
+    notification_email_parser.set_defaults(func=cmd_notification_email)
+
+    notification_sms_parser = subparsers.add_parser('sms', help='send an "SMS Notification"')
+    notification_sms_parser.add_argument('sender', type=str)
+    notification_sms_parser.add_argument('body', type=str)
+    notification_sms_parser.set_defaults(func=cmd_notification_sms)
+
+    get_time_parser = subparsers.add_parser('get_time', help='get the time stored on a connected watch')
+    get_time_parser.set_defaults(func=cmd_get_time)
+
+    set_time_parser = subparsers.add_parser('set_time', help='set the time stored on a connected watch')
+    set_time_parser.add_argument('timestamp', type=int, help='time stamp to be sent')
+    set_time_parser.set_defaults(func=cmd_set_time)
 
     args = parser.parse_args()
 
