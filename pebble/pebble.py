@@ -144,7 +144,7 @@ class Pebble(object):
 		log.info("Autodetect found a Pebble with ID %s" % id)
 		return id
 
-	def __init__(self, id):
+	def __init__(self, id = None):
 		if id is None:
 			id = Pebble.AutodetectDevice()
 		self.id = id
