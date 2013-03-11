@@ -54,6 +54,12 @@ def cmd_get_time(pebble, args):
 def cmd_set_time(pebble, args):
     pebble.set_time(args.timestamp)
 
+def cmd_remote(pebble, args):
+    pebble.remote(args.app)
+    #keep open to receive remote events
+    while True:
+        time.sleep(1)
+
 def main():
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
     parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
@@ -101,6 +107,10 @@ def main():
     set_time_parser = subparsers.add_parser('set_time', help='set the time stored on a connected watch')
     set_time_parser.add_argument('timestamp', type=int, help='time stamp to be sent')
     set_time_parser.set_defaults(func=cmd_set_time)
+
+    remote_parser = subparsers.add_parser('remote', help='remote control Mac applications')
+    remote_parser.add_argument('app', metavar='APP', choices=('itunes', 'keynote'), type=str, help='either itunes or keynote')
+    remote_parser.set_defaults(func=cmd_remote)
 
     args = parser.parse_args()
 
