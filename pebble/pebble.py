@@ -108,6 +108,49 @@ class Pebble(object):
 	to the watch through an instance of this class.
 	"""
 
+	_remote_commands = {
+		"ITUNES": [
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "iTunes" to activate
+					key code 49
+				end tell'		
+				""",
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "iTunes" to activate
+					key code 124 using command down
+				end tell'		
+				""",
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "iTunes" to activate
+					key code 123 using command down
+				end tell'		
+				"""
+		],
+		"KEYNOTE": [
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "Keynote" to activate
+					key code 35 using {command down, option down}
+				end tell'		
+				""",
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "Keynote" to activate
+					key code 124 using command down
+				end tell'		
+				""",
+				"""
+				osascript -e 'tell application "System Events"
+					tell application "Keynote" to activate
+					key code 123 using command down
+				end tell'		
+				"""
+		]
+	}
+
 	endpoints = {
 		"TIME": 11,
 		"VERSION": 16,
@@ -156,7 +199,8 @@ class Pebble(object):
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
-			self.endpoints["APP_MANAGER"]: self._appbank_status_response
+			self.endpoints["APP_MANAGER"]: self._appbank_status_response,
+			self.endpoints["MUSIC_CONTROL"]: self._remote_response
 		}
 
 		try:
@@ -167,6 +211,8 @@ class Pebble(object):
 			log.debug("Connected, discarding null response")
 			# we get a null response when we connect, discard it
 			self._ser.read(5)
+
+			self._ser.write("\x00\x0d\x00\x11\x01\xff\xff\xff\xff\x80\x00\x00\x00\x00\x00\x00\x32")
 
 			# Eat any cruft that might be sitting in the serial buffer...
 			while self._ser.read():
@@ -466,6 +512,28 @@ class Pebble(object):
 
 		self._alive = False
 		self._ser.close()
+
+	def remote(self, remote_app):
+		app_string = {
+			"ITUNES" : "iTunes",
+			"KEYNOTE" : "Keynote"
+		}
+		self._remote_app = remote_app.upper()
+		log.info("Remote: Control " + app_string[self._remote_app] + " with Pebble" )
+		self.set_nowplaying_metadata(app_string[self._remote_app], "libpebble", "Pebble")
+
+
+	def _remote_response(self, endpoint, data):
+		res, = unpack("!b", data)
+#		log.info("Remote: %s" % res)
+		cmd = ""
+		if res == 1:
+			cmd = self._remote_commands[self._remote_app][0]
+		elif res == 4:
+			cmd = self._remote_commands[self._remote_app][1]
+		elif res == 5:
+			cmd = self._remote_commands[self._remote_app][2]
+		os.system(cmd)
 
 	def _add_app(self, index):
 		data = pack("!bI", 3, index)
