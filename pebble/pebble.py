@@ -189,10 +189,6 @@ class Pebble(object):
 				if resp == None:
 					continue
 
-				if DEBUG_PROTOCOL:
-					log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
-					log.debug('<<< ' + resp.encode('hex'))
-
 				if endpoint in self._internal_endpoint_handlers:
 					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
@@ -224,6 +220,11 @@ class Pebble(object):
 			raise PebbleError(self.id, "Malformed response with length "+str(len(data)))
 		size, endpoint = unpack("!HH", data)
 		resp = self._ser.read(size)
+
+		if DEBUG_PROTOCOL:
+			log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
+			log.debug('<<< ' + (data + resp).encode('hex'))
+
 		return (endpoint, resp)
 
 	def register_endpoint(self, endpoint_name, func):
