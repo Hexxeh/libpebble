@@ -153,6 +153,7 @@ class Pebble(object):
 		self._internal_endpoint_handlers = {
 			self.endpoints["TIME"]: self._get_time_response,
 			self.endpoints["VERSION"]: self._version_response,
+			self.endpoints["PHONE_VERSION"]: self._phone_version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
@@ -164,13 +165,7 @@ class Pebble(object):
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=1)
 
-			log.debug("Connected, discarding null response")
-			# we get a null response when we connect, discard it
-			self._ser.read(5)
-
-			# Eat any cruft that might be sitting in the serial buffer...
-			while self._ser.read():
-				pass
+			log.debug("Connected")
 
 			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
@@ -558,6 +553,44 @@ class Pebble(object):
 		resp["btmac"] = ":".join([btmac_hex[i:i+2].upper() for i in reversed(xrange(0, 12, 2))])
 
 		return resp
+
+	def _phone_version_response(self, endpoint, data):
+		session_cap = {
+			"GAMMA_RAY" : 0x80000000,
+		}
+		remote_cap = {
+			"TELEPHONY" : 16,
+			"SMS" : 32,
+			"GPS" : 64,
+			"BTLE" : 128,
+			# XXX: CAMERA_FRONT is 240 in the APK, but this can't
+			# be right, as this will ruin the bitmask.  Check
+			# future app versions
+			"CAMERA_FRONT" : 240,
+			"CAMERA_REAR" : 256,
+			"ACCEL" : 512,
+			"GYRO" : 1024,
+			"COMPASS" : 2048,
+		}
+		os = {
+			"UNKNOWN" : 0,
+			"IOS" : 1,
+			"ANDROID" : 2,
+			"OSX" : 3,
+			"LINUX" : 4,
+			"WINDOWS" : 5,
+		}
+		# Magic prefix that the app adds
+		prefix = "\x01\xff\xff\xff\xff"
+		# Then session capabilities, android adds GAMMA_RAY and it's
+		# the only session flag so far
+		session = session_cap["GAMMA_RAY"]
+		# Then phone capabilities, android app adds TELEPHONY and SMS,
+		# and the phone type (we know android works for now)
+		remote = remote_cap["TELEPHONY"] | remote_cap["SMS"] | os["ANDROID"]
+		msg = prefix + pack("!II", session, remote)
+		self._send_message("PHONE_VERSION", msg);
+		return data
 
 class PutBytesClient(object):
 	states = {
