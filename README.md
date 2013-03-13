@@ -48,6 +48,7 @@ The following are currently supported:
 * Getting the installed firmware versions
 * Installing firmware
 * Getting device data (serial, BT MAC etc)
+* Remote support for Keynote and iTunes
 
 REPL
 ----
