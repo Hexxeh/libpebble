@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+import os
 import pebble as libpebble
+import subprocess
 import sys
 import time
 
@@ -18,6 +20,44 @@ def cmd_load_fw(pebble, args):
     time.sleep(5)
     print 'resetting to apply firmware update...'
     pebble.reset()
+
+def cmd_remote(pebble, args):
+    def do_oscacript(command):
+        cmd = "osascript -e 'tell application \""+args.app_name+"\" to "+command+"'"
+        try:
+            return subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError:
+            print "Failed to send message to "+args.app_name+", is it running?"
+            return False
+
+    def music_control_handler(endpoint, resp):
+        events = {
+            "PLAYPAUSE": "playpause",
+            "PREVIOUS": "previous track",
+            "NEXT": "next track"
+        }
+        do_oscacript(events[resp])
+        update_metadata()
+
+    def update_metadata():
+        artist = do_oscacript("artist of current track as string")
+        title = do_oscacript("name of current track as string")
+        album = do_oscacript("album of current track as string")
+
+        if not artist or not title or not album:
+            pebble.set_nowplaying_metadata("No Music Found", "", "")
+        else:
+            pebble.set_nowplaying_metadata(title, album, artist)
+
+    pebble.register_endpoint("MUSIC_CONTROL", music_control_handler)
+
+    print 'waiting for music control events'
+    try:
+        while True:
+            update_metadata()
+            time.sleep(5)
+    except KeyboardInterrupt:
+        return
 
 def cmd_logcat(pebble, args):
     print 'listening for logs...'
@@ -101,6 +141,11 @@ def main():
     set_time_parser = subparsers.add_parser('set_time', help='set the time stored on a connected watch')
     set_time_parser.add_argument('timestamp', type=int, help='time stamp to be sent')
     set_time_parser.set_defaults(func=cmd_set_time)
+
+    remote_parser = subparsers.add_parser('remote', help='control a music app on this PC using Pebble')
+    remote_parser.add_argument('app_name', type=str, help='title of application to be controlled')
+    remote_parser.set_defaults(func=cmd_remote)
+
 
     args = parser.parse_args()
 

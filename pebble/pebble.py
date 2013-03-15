@@ -156,6 +156,7 @@ class Pebble(object):
 			self.endpoints["VERSION"]: self._version_response,
 			self.endpoints["PHONE_VERSION"]: self._phone_version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
+			self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
@@ -165,7 +166,6 @@ class Pebble(object):
 			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=1)
-
 			log.debug("Connected")
 
 			log.debug("Initializing reader thread")
@@ -196,7 +196,7 @@ class Pebble(object):
 				if endpoint in self._internal_endpoint_handlers:
 					resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
-				if endpoint in self._endpoint_handlers:
+				if endpoint in self._endpoint_handlers and resp:
 					self._endpoint_handlers[endpoint](endpoint, resp)
 		except:
 			traceback.print_exc()
@@ -260,8 +260,10 @@ class Pebble(object):
 		"""Update the song metadata displayed in Pebble's music app."""
 
 		parts = [artist, album, track]
+
 		data = pack("!b", 16)
 		for part in parts:
+			part = part[0:29] if len(part) > 30 else part
 			data += pack("!b", len(part))+part
 		self._send_message("MUSIC_CONTROL", data)
 
@@ -480,6 +482,7 @@ class Pebble(object):
 			log.info("Got system message %s" % repr(unpack('!bb', data)))
 		else:
 			log.info("Got 'unknown' system message...")
+
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
@@ -563,10 +566,6 @@ class Pebble(object):
 			"SMS" : 32,
 			"GPS" : 64,
 			"BTLE" : 128,
-			# XXX: CAMERA_FRONT is 240 in the APK, but this can't
-			# be right, as this will ruin the bitmask.  Check
-			# future app versions
-			"CAMERA_FRONT" : 240,
 			"CAMERA_REAR" : 256,
 			"ACCEL" : 512,
 			"GYRO" : 1024,
@@ -580,17 +579,28 @@ class Pebble(object):
 			"LINUX" : 4,
 			"WINDOWS" : 5,
 		}
-		# Magic prefix that the app adds
-		prefix = "\x01\xff\xff\xff\xff"
+
 		# Then session capabilities, android adds GAMMA_RAY and it's
 		# the only session flag so far
 		session = session_cap["GAMMA_RAY"]
+
 		# Then phone capabilities, android app adds TELEPHONY and SMS,
 		# and the phone type (we know android works for now)
 		remote = remote_cap["TELEPHONY"] | remote_cap["SMS"] | os["ANDROID"]
-		msg = prefix + pack("!II", session, remote)
+
+		msg = pack("!biII", 1, -1, session, remote)
 		self._send_message("PHONE_VERSION", msg);
-		return data
+
+	def _music_control_response(self, endpoint, data):
+		event, = unpack("!b", data)
+
+		event_names = {
+			1: "PLAYPAUSE",
+			4: "NEXT",
+			5: "PREVIOUS",
+		}
+
+		return event_names[event] if event in event_names else None
 
 class PutBytesClient(object):
 	states = {
