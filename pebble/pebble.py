@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 
 import binascii
+import glob
+import json
+import logging
+import os
 import serial
 import stm32_crc
 import sys
@@ -8,11 +12,8 @@ import threading
 import time
 import traceback
 import zipfile
+
 from struct import pack, unpack
-import os
-import glob
-import logging
-import json
 
 log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
