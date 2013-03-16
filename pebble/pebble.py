@@ -146,7 +146,9 @@ class Pebble(object):
 		return id
 
 	def __init__(self, id = None, devicefile_template = "/dev/tty.Pebble%s-SerialPortSe"):
-		if id is None:
+		# You only need to perform autodetection if no id is given and 
+		# the template requires one.
+		if (id is None) and ("%s" in devicefile_template):
 			id = Pebble.AutodetectDevice(devicefile_template)
 		self.id = id
 		self._alive = True
