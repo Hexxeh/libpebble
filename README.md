@@ -20,15 +20,7 @@ Join #pebble on Freenode IRC to let me know how you get on and share your creati
 
  * Install rfcomm `sudo apt-get install rfcomm`
  * Bind the device `sudo rfcomm bind 0 PEBBLE_BLUETOOTH_ADDRESS 1`
- * make the following code change:
-
-Change:
-
-    self._ser = serial.Serial("/dev/tty.Pebble"+id+"-SerialPortSe", 115200, timeout=2)
-
-to: 
-
-    self._ser = serial.Serial("/dev/rfcomm0", 115200, timeout=2)
+ * When creating a pebble object, do `Pebble(devicefile_template="/dev/rfcomm0")`
 
 You can run the application as normal now.  You may have to run it as root with `sudo python pebble.py`
 
