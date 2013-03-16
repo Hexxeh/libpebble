@@ -128,11 +128,11 @@ class Pebble(object):
 	}
 
 	@staticmethod
-	def AutodetectDevice():
+	def AutodetectDevice(devicefile_template):
 		if os.name != "posix": #i.e. Windows
 			raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
 
-		pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
+		pebbles = glob.glob(devicefile_template % "????")
 
 		if len(pebbles) == 0:
 			raise PebbleError(None, "Autodetection could not find any Pebble devices")
@@ -145,9 +145,11 @@ class Pebble(object):
 		log.info("Autodetect found a Pebble with ID %s" % id)
 		return id
 
-	def __init__(self, id = None):
-		if id is None:
-			id = Pebble.AutodetectDevice()
+	def __init__(self, id = None, devicefile_template = "/dev/tty.Pebble%s-SerialPortSe"):
+		# You only need to perform autodetection if no id is given and 
+		# the template requires one.
+		if (id is None) and ("%s" in devicefile_template):
+			id = Pebble.AutodetectDevice(devicefile_template)
 		self.id = id
 		self._alive = True
 		self._endpoint_handlers = {}
@@ -163,7 +165,10 @@ class Pebble(object):
 		}
 
 		try:
-			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
+			if "%s" in devicefile_template: 
+				devicefile = devicefile_template % id
+			else: 
+				devicefile = devicefile_template
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=1)
 			log.debug("Connected")
