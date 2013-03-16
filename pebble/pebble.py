@@ -163,7 +163,10 @@ class Pebble(object):
 		}
 
 		try:
-			devicefile = devicefile_template % id
+			if "%s" in devicefile_template: 
+				devicefile = devicefile_template % id
+			else: 
+				devicefile = devicefile_template
 			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 			self._ser = serial.Serial(devicefile, 115200, timeout=1)
 			log.debug("Connected")
