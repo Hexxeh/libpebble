@@ -23,9 +23,10 @@ log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
-USING_LIGHTBLUE = True		# If True, use the lightblue bluetooth API instead of OSX serial port
-DEFAULT_PEBBLE_ID = None	# Triggers autodetection on unix-like systems
-DEBUG_PROTOCOL = True		# Display debugging information from main process
+DEFAULT_PEBBLE_ID = None			# Triggers autodetection on unix-like systems
+DEBUG_PROTOCOL = True				# Display debugging information from main process
+LIGHTBLUE_DEBUG_PROTOCOL = False	# Display debugging information from lightblue process
+PEBBLE_BT_PORT = 1					# The pebble listens to port 1 RFCOMM connection
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
@@ -80,10 +81,8 @@ class PebbleBundle(object):
 		return self.get_manifest()['resources']
 
 class EndpointSync():
-	if USING_LIGHTBLUE:
-		timeout = 5
-	else:
-		timeout = 10
+
+	timeout = 10
 
 	def __init__(self, pebble, endpoint):
 		pebble.register_endpoint(endpoint, self.callback)
@@ -102,16 +101,17 @@ class EndpointSync():
 
 class LightBlueProcess(object):
 	# Note that all calls to lightblue should occur in the same process
-	def __init__(self, mac_address, should_pair, send_queue, rec_queue, bt_port, debug, is_connected_flag, 
-					teardown_flag, message_sent_flag, autodetect_for_id):
+	def __init__(self, mac_address, should_pair, send_queue, rec_queue, is_connected_flag, 
+					teardown_flag, message_sent_flag, autodetect_for_id, debug=False, bt_port=True):
 		""" create bluetooth process paired to mac_address, must be run as a process"""
 
-		from lightblue import pair, socket, finddevices  # import must be in-process as lightblue is not thread-safe
+		from lightblue import pair, socket as lb_socket, finddevices, selectdevice  # lightblue is not thread-safe
 
 		# save init information for reconnections
-		self.lb_socket = socket
+		self.lb_socket = lb_socket
 		self.lb_pair = pair
 		self.lb_finddevices = finddevices
+		self.lb_selectdevice = selectdevice
 
 		self.autodetect_for_id = autodetect_for_id
 		self.mac_address = mac_address
@@ -132,41 +132,42 @@ class LightBlueProcess(object):
 	def __del__(self):
 		self.BT_TEARDOWN.set()
 
-	def connect(self):
-		if self.autodetect_for_id:
-			# if no pebble is specified, pair with the first pebble found
-			list_of_pebbles = list()
+	def autodetect(self):
+		list_of_pebbles = list()
+
+		if self.mac_address is not None and len(self.mac_address) is 4:
+			# we have the friendly name, let's get the full mac address
+			log.warn("Going to get full address for device %s, ensure device is broadcasting." % self.mac_address)
+			# scan for active devices
 			devices = self.lb_finddevices(length=4)
-			regex_id = '\w\w\w\w'
-			if self.mac_address is not None and len(self.mac_address) is 4:
-				# we have the friendly name, let's get the full name
-				regex_id = self.mac_address
 
 			for device in devices:
-			    if re.search(r'Pebble ' + regex_id, device[1], re.IGNORECASE):
-			        log.debug("Found Pebble :" + device[1])
+			    if re.search(r'Pebble ' + self.mac_address, device[1], re.IGNORECASE):
+			        log.debug("Found Pebble: " + device[1])
 			        list_of_pebbles.append(device)
 
-			if len(list_of_pebbles) is 0:
-				if regex_id is not '\w\w\w\w':
-					raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
-				else:
-					raise PebbleError(self.mac_address, "Failed to connect to Pebble, no Pebbles found over Bluetooth")
+			if len(list_of_pebbles) is 1:
+				return list_of_pebbles[0][0]
+			else:
+				raise PebbleError(self.mac_address, "Failed to find Pebble via LightBlue Bluetooth API")
+		else:
+			# no pebble id was provided... give them the GUI selector
+			return self.lb_selectdevice()[0]
 
-			log.warn("Lightblue autodetect found %d Pebble(s); connecting to %s" % (len(list_of_pebbles), list_of_pebbles[0][0]))
 
-			self.mac_address = list_of_pebbles[0][0]
-
+	def connect(self):
+		if self.autodetect_for_id:
+			self.mac_address = self.autodetect()
+			log.debug("Lightblue autodetect found a Pebble, connecting to " + self.mac_address)
 
 		# create the bluetooth socket from the mac address,
 		if self.should_pair:
 			self.lb_pair(self.mac_address)
-			self.should_unpair = True
-		try:
-			self._bts = self.lb_socket()
-			self._bts.connect((self.mac_address, self.PEBBLE_BT_PORT))
-		except:
-			raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
+		#try:
+		self._bts = self.lb_socket()
+		self._bts.connect((self.mac_address, self.PEBBLE_BT_PORT))
+		#except:
+		#	raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
 
 		if self.LIGHTBLUE_DEBUG:
 			log.debug("connection established to " + self.mac_address)
@@ -200,7 +201,7 @@ class LightBlueProcess(object):
 			rec_data = None
 			try:
 				rec_data = self._bts.recv(4)
-			except socket.timeout:
+			except (socket.timeout, socket.error):
 				# Exception raised from timing out on nonblocking
 				pass
 
@@ -217,7 +218,7 @@ class LightBlueProcess(object):
 				if self.LIGHTBLUE_DEBUG:
 					log.debug("LightBlue Read: %r " % resp)
 		if e is not None and self.LIGHTBLUE_DEBUG:  # just let it die silent whenever the parent dies and it throws an EOFERROR
-			raise PebbleError(self.mac_address, "LightBlue polling loop closed due to " + str(e))
+			raise PebbleError(self.mac_address, "LightBlue polling loop closed due to " + e)
 		self._bts.close()
 
 class PebbleError(Exception):
@@ -226,8 +227,6 @@ class PebbleError(Exception):
 		self._message = message
 
 	def __str__(self):
-		if USING_LIGHTBLUE:
-			return "%s (%s)" % (self._message, self._id)
 		return "%s (ID:%s)" % (self._message, self._id)
 
 class Pebble(object):
@@ -273,10 +272,11 @@ class Pebble(object):
 		log.info("Autodetect found a Pebble with ID %s" % id)
 		return id
 
-	def __init__(self, id = None, USING_LIGHTBLUE = False, PAIR_FIRST = False):
-		if id is None and not USING_LIGHTBLUE:
+	def __init__(self, id = None, using_lightblue = False, pair_first = False):
+		if id is None and not using_lightblue:
 			id = Pebble.AutodetectDevice()
 		self.id = id
+		self.USING_LIGHTBLUE = using_lightblue
 		self._alive = True
 		self._endpoint_handlers = {}
 		self._internal_endpoint_handlers = {
@@ -290,17 +290,14 @@ class Pebble(object):
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
-		if USING_LIGHTBLUE:
+		if using_lightblue:
 			# if no id was specified or if the friendly digits were specified autodetect the real mac address
 			if self.id is None or len(self.id) is 4:
 				self.autodetect_for_id = True
 			else:
 				self.autodetect_for_id = False
-			self.USING_LIGHTBLUE = True
-			self.PEBBLE_PAIR_FIRST = PAIR_FIRST		# Should the script attempt to pair with the pebble before sending a command?
-			self.PEBBLE_BT_PORT = 1					# The pebble listens to port 1 RFCOMM connection
-			self.LIGHTBLUE_DEBUG = False			# Display debugging information from lightblue process
-			self.BT_MESSAGE_TIMEOUT = 5				# How long should we .wait() for the lightblue process to send the message?
+
+			self.lightblue_message_timeout = 5				# How long should we .wait() for the lightblue process to send the message?
 			self.manager = multiprocessing.Manager()		# Provide a processes manager for working IPC manager.Queues
 			self.SEND_QUEUE = self.manager.Queue()			# The queue of messages that the lightblue process will send
 			self.REC_QUEUE = self.manager.Queue()			# The queue of messages that the lightblue process has recieved
@@ -311,9 +308,9 @@ class Pebble(object):
 			try:
 				log.debug("Initializing Lightblue BT socket process")
 
-				self.bt_socket_proc = Process(target=LightBlueProcess, args=(self.id, self.PEBBLE_PAIR_FIRST,
-						self.SEND_QUEUE, self.REC_QUEUE, self.PEBBLE_BT_PORT, self.LIGHTBLUE_DEBUG, self.BT_IS_CONNECTED, 
-						self.BT_TEARDOWN, self.BT_MESSAGE_SENT, self.autodetect_for_id))
+				self.bt_socket_proc = Process(target=LightBlueProcess, args=(self.id, pair_first,
+						self.SEND_QUEUE, self.REC_QUEUE, self.BT_IS_CONNECTED,
+						self.BT_TEARDOWN, self.BT_MESSAGE_SENT, self.autodetect_for_id, LIGHTBLUE_DEBUG_PROTOCOL, PEBBLE_BT_PORT))
 				self.bt_socket_proc.start()
 				log.debug("BT socket process loaded id: %d" % self.bt_socket_proc._identity)
 
@@ -322,8 +319,8 @@ class Pebble(object):
 				self.BT_IS_CONNECTED.wait()
 			except:
 				raise PebbleError(id, "Failed to spawn Lightblue BT process")
+
 		else:
-			self.USING_LIGHTBLUE = False
 			try:
 				devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 				log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
@@ -397,7 +394,7 @@ class Pebble(object):
 				raise PebbleError(self.mac_address, "Failed to access queue, disconnecting")
 				self.BT_TEARDOWN.set()
 			# now that the send queue was updated, wait for the message to be sent before continuing.
-			self.BT_MESSAGE_SENT.wait()
+			self.BT_MESSAGE_SENT.wait(self.lightblue_message_timeout)
 		else:
 			self._ser.write(msg)
 

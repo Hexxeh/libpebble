@@ -99,7 +99,7 @@ def main():
     parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
 
     parser.add_argument('--lightblue', action="store_true", help='use LightBlue bluetooth API')
-    parser.add_argument('--pair', action="store_true", help='use LightBlue bluetooth API')
+    parser.add_argument('--pair', action="store_true", help='From LightBlue bluetooth API, pair to the pebble before connecting')
 
     subparsers = parser.add_subparsers(help='commands', dest='which')
 
