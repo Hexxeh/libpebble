@@ -9,6 +9,7 @@ import os
 import Queue
 import re
 import serial
+import socket
 import stm32_crc
 import threading
 import time
@@ -137,24 +138,25 @@ class LightBlueProcess(object):
 			list_of_pebbles = list()
 			devices = self.lb_finddevices(length=4)
 			regex_id = '\w\w\w\w'
-			if self.mac_address is not None:
-				if len (self.mac_address) is 4:
-					# we have the friendly name, let's get the full name
-					regex_id = self.mac_address
+			if self.mac_address is not None and len(self.mac_address) is 4:
+				# we have the friendly name, let's get the full name
+				regex_id = self.mac_address
 
 			for device in devices:
-			    if re.search(r'Pebble ' + regex_id, device[1]):
+			    if re.search(r'Pebble ' + regex_id, device[1], re.IGNORECASE):
 			        log.debug("Found Pebble :" + device[1])
 			        list_of_pebbles.append(device)
-			log.warn("Lightblue autodetect found %d Pebble(s); using first in list" % len(list_of_pebbles))
+
 			if len(list_of_pebbles) is 0:
 				if regex_id is not '\w\w\w\w':
-					raise PebbleError(self.mac_address, "Failed to connect to Pebble " + self.mac_address + " via LightBlue Bluetooth API")
+					raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
 				else:
-					raise PebbleError(self.mac_address, "Failed to connect to Pebble, no Pebbles found with LightBlue autodetect")
+					raise PebbleError(self.mac_address, "Failed to connect to Pebble, no Pebbles found over Bluetooth")
+
+			log.warn("Lightblue autodetect found %d Pebble(s); connecting to %s" % (len(list_of_pebbles), list_of_pebbles[0][0]))
 
 			self.mac_address = list_of_pebbles[0][0]
-			self.should_pair = True
+
 
 		# create the bluetooth socket from the mac address,
 		if self.should_pair:
@@ -198,7 +200,7 @@ class LightBlueProcess(object):
 			rec_data = None
 			try:
 				rec_data = self._bts.recv(4)
-			except Exception:
+			except socket.timeout:
 				# Exception raised from timing out on nonblocking
 				pass
 
@@ -255,8 +257,6 @@ class Pebble(object):
 
 	@staticmethod
 	def AutodetectDevice():
-		#return '00:18:33:5B:A7:AD'
-
 		if os.name != "posix": #i.e. Windows
 			raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
 
