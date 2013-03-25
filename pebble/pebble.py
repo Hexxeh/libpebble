@@ -137,15 +137,16 @@ class LightBlueProcess(object):
 			list_of_pebbles = list()
 			devices = self.lb_finddevices(length=4)
 			regex_id = '\w\w\w\w'
-			if len (self.mac_address) is 4:
-				# we have the friendly name, let's get the full name
-				regex_id = self.mac_address
+			if self.mac_address is not None:
+				if len (self.mac_address) is 4:
+					# we have the friendly name, let's get the full name
+					regex_id = self.mac_address
 
 			for device in devices:
 			    if re.search(r'Pebble ' + regex_id, device[1]):
 			        log.debug("Found Pebble :" + device[1])
 			        list_of_pebbles.append(device)
-			log.warn("Lightblue autodetect found %d Pebbles; using first in list" % len(list_of_pebbles))
+			log.warn("Lightblue autodetect found %d Pebble(s); using first in list" % len(list_of_pebbles))
 			if len(list_of_pebbles) is 0:
 				if regex_id is not '\w\w\w\w':
 					raise PebbleError(self.mac_address, "Failed to connect to Pebble " + self.mac_address + " via LightBlue Bluetooth API")
@@ -291,7 +292,7 @@ class Pebble(object):
 
 		if USING_LIGHTBLUE:
 			# if no id was specified or if the friendly digits were specified autodetect the real mac address
-			if len(self.id) is None or len(self.id) is 4:
+			if self.id is None or len(self.id) is 4:
 				self.autodetect_for_id = True
 			else:
 				self.autodetect_for_id = False
