@@ -98,6 +98,9 @@ def main():
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
     parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
 
+    parser.add_argument('--lightblue', action="store_true", help='use LightBlue bluetooth API')
+    parser.add_argument('--pair', action="store_true", help='use LightBlue bluetooth API')
+
     subparsers = parser.add_subparsers(help='commands', dest='which')
 
     ping_parser = subparsers.add_parser('ping', help='send a ping message')
@@ -154,7 +157,7 @@ def main():
         if attempts > MAX_ATTEMPTS:
             raise 'Could not connect to Pebble'
         try:
-            pebble = libpebble.Pebble(args.pebble_id)
+            pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
             break
         except libpebble.PebbleError:
             time.sleep(5)
