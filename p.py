@@ -154,18 +154,18 @@ def main():
 
     args = parser.parse_args()
 
-    attempts = 0
-    while True:
-        if attempts > MAX_ATTEMPTS:
-            raise 'Could not connect to Pebble'
-        try:
-            pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
-            break
-        except libpebble.PebbleError as e:
-            if args.lightblue:
-                raise e
-            time.sleep(5)
-            attempts += 1
+    #attempts = 0
+    #while True:
+        #if attempts > MAX_ATTEMPTS:
+        #    raise 'Could not connect to Pebble'
+        #try:
+    pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
+     #       break
+        #except Exception as e:
+        #    if args.lightblue:
+        #        break
+        #    time.sleep(5)
+        #    attempts += 1
 
     args.func(pebble, args)
 
