@@ -96,10 +96,12 @@ def cmd_set_time(pebble, args):
 
 def main():
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
-    parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address')
+    parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address. \nNOTE: if \
+                        --lightblue is set, providing a full MAC address (ex: "A0:1B:C0:D3:DC:93") won\'t require the pebble \
+                        to be discoverable and will be faster')
 
     parser.add_argument('--lightblue', action="store_true", help='use LightBlue bluetooth API')
-    parser.add_argument('--pair', action="store_true", help='From LightBlue bluetooth API, pair to the pebble before connecting')
+    parser.add_argument('--pair', action="store_true", help='pair to the pebble from LightBlue bluetooth API before connecting.')
 
     subparsers = parser.add_subparsers(help='commands', dest='which')
 

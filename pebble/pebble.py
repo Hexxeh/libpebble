@@ -163,17 +163,15 @@ class LightBlueProcess(object):
 		# create the bluetooth socket from the mac address,
 		if self.should_pair:
 			self.lb_pair(self.mac_address)
-		#try:
-		self._bts = self.lb_socket()
-		self._bts.connect((self.mac_address, self.PEBBLE_BT_PORT))
-		#except:
-		#	raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
+		try:
+			self._bts = self.lb_socket()
+			self._bts.connect((self.mac_address, self.PEBBLE_BT_PORT))
+		except:
+			raise PebbleError(self.mac_address, "Failed to connect to Pebble via LightBlue Bluetooth API")
 
 		if self.LIGHTBLUE_DEBUG:
 			log.debug("connection established to " + self.mac_address)
 
-		# once connected over the socket, throw away the version request
-		self._bts.recv(5)
 		self._bts.setblocking(False)
 		# signal to the main process that it can spawn the reader thread now
 		self.BT_IS_CONNECTED.set()
@@ -217,6 +215,7 @@ class LightBlueProcess(object):
 
 				if self.LIGHTBLUE_DEBUG:
 					log.debug("LightBlue Read: %r " % resp)
+
 		if e is not None and self.LIGHTBLUE_DEBUG:  # just let it die silent whenever the parent dies and it throws an EOFERROR
 			raise PebbleError(self.mac_address, "LightBlue polling loop closed due to " + e)
 		self._bts.close()
@@ -326,8 +325,6 @@ class Pebble(object):
 				log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 				self._ser = serial.Serial(devicefile, 115200, timeout=1)
 				log.debug("Connected")
-
-				self.bt_socket_proc = None
 			except:
 				PebbleError(id, "Failed to connect to Pebble over PySerial")
 
@@ -350,7 +347,9 @@ class Pebble(object):
 				pass
 
 	def get_lightblue_process(self):
-		return self.bt_socket_proc
+		if self.USING_LIGHTBLUE:
+			return self.bt_socket_proc
+		return None
 
 	def _reader(self):
 		try:
