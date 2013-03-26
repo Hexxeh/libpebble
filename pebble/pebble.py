@@ -27,6 +27,7 @@ DEFAULT_PEBBLE_ID = None			# Triggers autodetection on unix-like systems
 DEBUG_PROTOCOL = True				# Display debugging information from main process
 LIGHTBLUE_DEBUG_PROTOCOL = False	# Display debugging information from lightblue process
 PEBBLE_BT_PORT = 1					# The pebble listens to port 1 RFCOMM connection
+PEBBLE_BT_INIT_TIMEOUT = 20			# How long should the main process wait for lightBlue to pair and connect?
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
@@ -310,12 +311,16 @@ class Pebble(object):
 				self.bt_socket_proc = Process(target=LightBlueProcess, args=(self.id, pair_first,
 						self.SEND_QUEUE, self.REC_QUEUE, self.BT_IS_CONNECTED,
 						self.BT_TEARDOWN, self.BT_MESSAGE_SENT, self.autodetect_for_id, LIGHTBLUE_DEBUG_PROTOCOL, PEBBLE_BT_PORT))
+				self.bt_socket_proc.daemon = True
 				self.bt_socket_proc.start()
 				log.debug("BT socket process loaded id: %d" % self.bt_socket_proc._identity)
 
 				self._ser = None
 				# wait for functioning lightblue bluetooth socket and polling loop
-				self.BT_IS_CONNECTED.wait()
+				self.BT_IS_CONNECTED.wait(PEBBLE_BT_INIT_TIMEOUT)
+				# did we time out or was it correctly connected?
+				if not self.BT_IS_CONNECTED.is_set():
+					raise
 			except:
 				raise PebbleError(id, "Failed to spawn Lightblue BT process")
 

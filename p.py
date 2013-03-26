@@ -161,7 +161,9 @@ def main():
         try:
             pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
             break
-        except libpebble.PebbleError:
+        except libpebble.PebbleError as e:
+            if args.lightblue:
+                raise e
             time.sleep(5)
             attempts += 1
 
