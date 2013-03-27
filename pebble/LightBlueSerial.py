@@ -2,8 +2,9 @@
 import logging
 import multiprocessing
 import Queue
-import time
+import re
 import socket
+import time
 from multiprocessing import Process
 from struct import pack, unpack
 
@@ -20,7 +21,7 @@ class BTPebbleError(Exception):
         return "%s ID:(%s) on LightBlue API" % (self._message, self._id)
 
 class LightBlueSerial(object):
-    def __init__(self, id, should_pair, debug_protocol=True, connection_process_timeout=20):
+    def __init__(self, id, should_pair, debug_protocol=True, connection_process_timeout=60):
 
         self.mac_address = id
         self.debug_protocol = debug_protocol
@@ -107,7 +108,7 @@ class LightBlueSerial(object):
             self.mac_address = autodetect(self)
 
         # create the bluetooth socket from the mac address
-        if self.should_pair and mac_address is not None:
+        if self.should_pair and self.mac_address is not None:
             pair(self.mac_address)
         try:
             self._bts = lb_socket()
