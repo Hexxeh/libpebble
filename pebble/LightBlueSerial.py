@@ -83,11 +83,11 @@ class LightBlueSerial(object):
                 # we have the friendly name, let's get the full mac address
                 log.warn("Going to get full address for device %s, ensure device is broadcasting." % self.mac_address)
                 # scan for active devices
-                devices = finddevices(length=8)
+                devices = finddevices(timeout=8)
 
                 for device in devices:
                     if re.search(r'Pebble ' + self.mac_address, device[1], re.IGNORECASE):
-                        log.debug("Found Pebble: " + device[1])
+                        log.debug("Found Pebble: %s @ %s" % (device[1], device[0]))
                         list_of_pebbles.append(device)
 
                 if len(list_of_pebbles) is 1:
