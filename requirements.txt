@@ -1,2 +1,2 @@
 pyserial>=2.6
--e git://github.com/pebble/lightblue-0.4.git#egg=lightblue-0.4
+git+http://github.com/pebble/lightblue-0.4.git#egg=lightblue-0.4
