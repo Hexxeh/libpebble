@@ -312,6 +312,13 @@ class Pebble(object):
 		data = pack("!bII", 2, appid, index)
 		self._send_message("APP_MANAGER", data)
 
+	def remove_app_by_uuid(self, uuid):
+
+		"""Remove an installed application by UUID."""
+
+		data = pack("b", 0x02) + uuid
+		self._send_message("APP_MANAGER", data)
+
 	def get_time(self, async = False):
 
 		"""Retrieve the time from the Pebble's RTC."""

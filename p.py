@@ -72,12 +72,24 @@ def cmd_list_apps(pebble, args):
         print '[{}] {}'.format(app['index'], app['name'])
 
 def cmd_rm_app(pebble, args):
-    for app in pebble.get_appbank_status()['apps']:
-        if app['index'] == args.app_index:
-            pebble.remove_app(app["id"], app["index"])
-
+    try:
+        uuid = args.app_index_or_hex_uuid.decode('hex')
+        if len(uuid) == 16:
+            pebble.remove_app_by_uuid(uuid)
             print 'removed app'
             return
+    except:
+        pass
+    try:
+        idx = int(args.app_index_or_hex_uuid)
+        for app in pebble.get_appbank_status()['apps']:
+            if app['index'] == idx:
+                pebble.remove_app(app["id"], app["index"])
+                print 'removed app'
+                return
+    except:
+        print 'Invalid arguments. Use bank index or hex app UUID (16 bytes / 32 hex digits)'
+        pass
 
 def cmd_reset(pebble, args):
     pebble.reset()
@@ -123,7 +135,7 @@ def main():
     list_apps_parser.set_defaults(func=cmd_list_apps)
 
     rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
-    rm_app_parser.add_argument('app_index', metavar='IDX', type=int, help='the app index to delete')
+    rm_app_parser.add_argument('app_index_or_hex_uuid', metavar='IDX or UUID', type=str, help='the app index or UUID to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
 
     reset_parser = subparsers.add_parser('reset', help='reset the watch remotely')
