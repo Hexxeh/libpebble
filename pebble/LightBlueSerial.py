@@ -12,7 +12,7 @@ log = logging.getLogger()
 logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
-class BTPebbleError(Exception):
+class LightBlueSerialError(Exception):
      def __init__(self, id, message):
         self._id = id
         self._message = message
@@ -21,7 +21,9 @@ class BTPebbleError(Exception):
         return "%s ID:(%s) on LightBlue API" % (self._message, self._id)
 
 class LightBlueSerial(object):
-    def __init__(self, id, should_pair, debug_protocol=True, connection_process_timeout=60):
+    """ a wrapper for LightBlue that provides Serial-style read, write and close"""
+
+    def __init__(self, id, should_pair, debug_protocol=False, connection_process_timeout=60):
 
         self.mac_address = id
         self.debug_protocol = debug_protocol
@@ -36,17 +38,14 @@ class LightBlueSerial(object):
         self.bt_message_recd = multiprocessing.Event()
         self.bt_connected = multiprocessing.Event()
 
-        self.bt_socket_proc = Process(target=self.LightBlueProcess)
+        self.bt_socket_proc = Process(target=self.run)
         self.bt_socket_proc.daemon = True
         self.bt_socket_proc.start()
 
         # wait for a successful connection from child process before returning to main process
         self.bt_connected.wait(connection_process_timeout)
         if not self.bt_connected.is_set():
-            raise BTPebbleError(id, "Connection timed out, LightBlueProcess was provided %d seconds to complete connecting" % connection_process_timeout)
-
-    #def __del__(self):
-    #    self.close()
+            raise LightBlueSerialError(id, "Connection timed out, LightBlueProcess was provided %d seconds to complete connecting" % connection_process_timeout)
 
     def write(self, message):
         """ send a message to the LightBlue processs"""
@@ -54,7 +53,7 @@ class LightBlueSerial(object):
             self.send_queue.put(message)
             self.bt_message_sent.wait()
         except (IOError, EOFError):
-            raise BTPebbleError(self.mac_address, "Failed to access queue, disconnecting")
+            raise LightBlueSerialError(self.mac_address, "Failed to access write queue, disconnecting")
             self.close()
         
 
@@ -66,14 +65,14 @@ class LightBlueSerial(object):
         except Queue.Empty:
             return (None, None)
         except (IOError, EOFError):
-            raise BTPebbleError(self.mac_address, "Failed to access queue, disconnecting")
+            raise LightBlueSerialError(self.mac_address, "Failed to access read queue, disconnecting")
             self.close()
 
     def close(self):
         """ close the LightBlue connection process"""
         self.bt_teardown.set()
 
-    def LightBlueProcess(self):
+    def run(self):
         """ create bluetooth process paired to mac_address, must be run as a process"""
         from lightblue import pair, unpair, socket as lb_socket, finddevices, selectdevice
 
@@ -84,7 +83,7 @@ class LightBlueSerial(object):
                 # we have the friendly name, let's get the full mac address
                 log.warn("Going to get full address for device %s, ensure device is broadcasting." % self.mac_address)
                 # scan for active devices
-                devices = finddevices(length=4)
+                devices = finddevices(length=8)
 
                 for device in devices:
                     if re.search(r'Pebble ' + self.mac_address, device[1], re.IGNORECASE):
@@ -94,7 +93,7 @@ class LightBlueSerial(object):
                 if len(list_of_pebbles) is 1:
                     return list_of_pebbles[0][0]
                 else:
-                    raise BTPebbleError(self.mac_address, "Failed to find Pebble")
+                    raise LightBlueSerialError(self.mac_address, "Failed to find Pebble")
             else:
                 # no pebble id was provided... give them the GUI selector
                 try:
@@ -115,7 +114,7 @@ class LightBlueSerial(object):
             self._bts.connect((self.mac_address, 1))  # pebble uses RFCOMM port 1
             self._bts.setblocking(False)
         except:
-            raise BTPebbleError(self.mac_address, "Failed to connect to Pebble")
+            raise LightBlueSerialError(self.mac_address, "Failed to connect to Pebble")
 
         if self.debug_protocol:
             log.debug("Connection established to " + self.mac_address)
@@ -137,7 +136,7 @@ class LightBlueSerial(object):
                 self.bt_teardown.set()
                 e = "Queue Error while sending data"
 
-            # if anything is recieved relay it back
+            # if anything is received relay it back
             rec_data = None
             try:
                 rec_data = self._bts.recv(4)
@@ -159,5 +158,5 @@ class LightBlueSerial(object):
                 self.bt_message_recd.set()
 
         # just let it die silent whenever the parent dies and it throws an EOFERROR
-        if e is not None and not self.debug_protocol:  
-            raise BTPebbleError(self.mac_address, "LightBlue polling loop closed due to " + e)
+        if e is not None and self.debug_protocol:  
+            raise LightBlueSerialError(self.mac_address, "LightBlue polling loop closed due to " + e)

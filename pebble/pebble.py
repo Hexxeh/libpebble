@@ -221,8 +221,10 @@ class Pebble(object):
 
 	def _recv_message(self):
 		if self.using_lightblue:
-			resp, endpoint = self._ser.read()
+			endpoint, resp = self._ser.read()
 			data = ''
+			if resp is None:
+				return (None, None)
 		else:
 			data = self._ser.read(4)
 			if len(data) == 0:
