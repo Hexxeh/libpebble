@@ -68,8 +68,12 @@ def cmd_logcat(pebble, args):
         return
 
 def cmd_list_apps(pebble, args):
-    for app in pebble.get_appbank_status()['apps']:
-        print '[{}] {}'.format(app['index'], app['name'])
+    apps = pebble.get_appbank_status()
+    if apps is not False:
+        for app in apps['apps']:
+            print '[{}] {}'.format(app['index'], app['name'])
+    else:
+        print "no apps"
 
 def cmd_rm_app(pebble, args):
     try:
@@ -166,20 +170,20 @@ def main():
 
     args = parser.parse_args()
 
-    #attempts = 0
-    #while True:
-        #if attempts > MAX_ATTEMPTS:
-        #    raise 'Could not connect to Pebble'
-        #try:
-    pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
-     #       break
-        #except Exception as e:
-        #    if args.lightblue:
-        #        break
-        #    time.sleep(5)
-        #    attempts += 1
+    attempts = 0
+    while True:
+        if attempts > MAX_ATTEMPTS:
+            raise 'Could not connect to Pebble'
+        try:
+            pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
+            break
+        except:
+            time.sleep(5)
+            attempts += 1
 
     args.func(pebble, args)
+
+    pebble.disconnect()
 
 if __name__ == '__main__':
     main()

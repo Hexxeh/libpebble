@@ -7,13 +7,12 @@ import logging
 import os
 import serial
 import stm32_crc
-import sys
 import threading
 import time
 import traceback
 import zipfile
-from LightBlueSerial import LightBlueSerial
 
+from LightBluePebble import LightBluePebble
 from struct import pack, unpack
 
 log = logging.getLogger()
@@ -166,18 +165,17 @@ class Pebble(object):
 
 		try:
 			if using_lightblue:
-				self._ser = LightBlueSerial(self.id, pair_first) 
+				self._ser = LightBluePebble(self.id, pair_first)
 			else:
 				devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 				log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
 				self._ser = serial.Serial(devicefile, 115200, timeout=1)
 
-			log.debug("Connected")
 			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
 			self._read_thread.setDaemon(True)
 			self._read_thread.start()
-			log.debug("Reader thread loaded")
+			log.debug("Reader thread loaded on tid %s" % self._read_thread.name)
 		except PebbleError:
 			raise PebbleError(id, "Failed to connect to Pebble")
 		except:
@@ -221,10 +219,14 @@ class Pebble(object):
 
 	def _recv_message(self):
 		if self.using_lightblue:
-			endpoint, resp = self._ser.read()
-			data = ''
-			if resp is None:
-				return (None, None)
+			try:
+				endpoint, resp, data = self._ser.read()
+				if resp is None:
+					return None, None
+			except TypeError:
+				# the lightblue process has likely shutdown and cannot be read from
+				self.alive = False
+				return None, None
 		else:
 			data = self._ser.read(4)
 			if len(data) == 0:
