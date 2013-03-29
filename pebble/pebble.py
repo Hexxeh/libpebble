@@ -335,10 +335,10 @@ class Pebble(object):
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
-	def reinstall_app(self, name, pbz_path):
+	def reinstall_app_by_name(self, name, pbz_path):
 
 		"""
-		A convenience method to uninstall and install an app.
+		A convenience method to uninstall and install an app by app name.
 
 		This will only work if the app hasn't changed names between the new and old versions.
 		"""
@@ -346,6 +346,16 @@ class Pebble(object):
 		for app in apps["apps"]:
 			if app["name"] == name:
 				self.remove_app(app["id"], app["index"])
+		self.install_app(pbz_path)
+
+	def reinstall_app_by_uuid(self, uuid, pbz_path):
+
+		"""
+		A convenience method to uninstall and install an app by UUID.
+
+		Must supply app UUID from source. ex: '54D3008F0E46462C995C0D0B4E01148C'
+		"""
+		self.remove_app_by_uuid(uuid)
 		self.install_app(pbz_path)
 
 	def install_app(self, pbz_path):

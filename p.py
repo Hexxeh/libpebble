@@ -77,7 +77,7 @@ def cmd_rm_app(pebble, args):
         if len(uuid) == 16:
             pebble.remove_app_by_uuid(uuid)
             print 'removed app'
-            return
+            return 0
     except:
         pass
     try:
@@ -86,10 +86,21 @@ def cmd_rm_app(pebble, args):
             if app['index'] == idx:
                 pebble.remove_app(app["id"], app["index"])
                 print 'removed app'
-                return
+                return 0
     except:
         print 'Invalid arguments. Use bank index or hex app UUID (16 bytes / 32 hex digits)'
         pass
+    return 1
+
+def cmd_reinstall_app(pebble, args):
+    if args.name and not args.uuid:
+        pebble.reinstall_app_by_name(args.app_name_or_hex_uuid, args.app_bundle)
+    elif args.uuid or args.index:
+        args.app_index_or_hex_uuid = args.app_name_or_hex_uuid
+        if not cmd_rm_app(pebble, args):
+            cmd_load(pebble, args)
+    else:
+        print "Invalid arguments"
 
 def cmd_reset(pebble, args):
     pebble.reset()
@@ -137,6 +148,17 @@ def main():
     rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
     rm_app_parser.add_argument('app_index_or_hex_uuid', metavar='IDX or UUID', type=str, help='the app index or UUID to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
+
+    rein_app_parser = subparsers.add_parser('reinstall', help='reinstall an installed app with the UUID or the name of the app')
+    group = rein_app_parser.add_mutually_exclusive_group()
+    group.add_argument('--name', action="store_true", help='reinstall by app name (must be the same as already \
+                                    installed name)')
+    group.add_argument('--uuid', action="store_true", help='reinstall by app UUID (provide installed app\'s hex \
+                                    UUID as a single argument without the \'0x\' prefix)')
+    group.add_argument('--index', action="store_true", help='remove the app at this index before installing specified app')
+    rein_app_parser.add_argument('app_name_or_hex_uuid', metavar='Name_or_UUID_or_Index', type=str, help='the app name or UUID to delete')
+    rein_app_parser.add_argument('app_bundle', metavar='FILE', type=str, help='a compiled app bundle')
+    rein_app_parser.set_defaults(func=cmd_reinstall_app)
 
     reset_parser = subparsers.add_parser('reset', help='reset the watch remotely')
     reset_parser.set_defaults(func=cmd_reset)
