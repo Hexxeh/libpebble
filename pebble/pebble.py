@@ -7,9 +7,11 @@ import logging
 import os
 import serial
 import stm32_crc
+import struct
 import threading
 import time
 import traceback
+import uuid
 import zipfile
 
 from LightBluePebble import LightBluePebble
@@ -26,24 +28,78 @@ DEBUG_PROTOCOL = False
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
 
+	STRUCT_DEFINITION = [
+		'8s',   # header
+		'2B',   # struct version
+		'2B',   # sdk version
+		'2B',   # app version
+		'H',    # size
+		'I',    # offset
+		'I',    # crc
+		'32s',  # app name
+		'32s',  # company name
+		'I',    # icon resource id
+		'I',    # symbol table address
+		'I',    # flags
+		'I',    # relocation list start
+		'I',    # num relocation list entries
+		'16s'   # uuid
+	]
+
 	def __init__(self, bundle_path):
 		bundle_abs_path = os.path.abspath(bundle_path)
 		if not os.path.exists(bundle_abs_path):
-			raise "Bundle does not exist: " + bundle_path
+			raise TypeError("Bundle does not exist: " + bundle_path)
 
 		self.zip = zipfile.ZipFile(bundle_abs_path)
 		self.path = bundle_abs_path
 		self.manifest = None
+		self.header = None
+
+		self.app_metadata_struct = struct.Struct(''.join(self.STRUCT_DEFINITION))
+		self.app_metadata_length_bytes = self.app_metadata_struct.size
 
 	def get_manifest(self):
 		if (self.manifest):
 			return self.manifest
 
 		if self.MANIFEST_FILENAME not in self.zip.namelist():
-			raise "Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME)
+			raise TypeError("Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME))
 
 		self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
 		return self.manifest
+
+	def get_app_metadata(self):
+
+		if (self.header):
+			return self.header
+
+		app_bin = self.zip.open('pebble-app.bin').read()
+
+		header = app_bin[0:self.app_metadata_length_bytes]
+		values = self.app_metadata_struct.unpack(header)
+		self.header = {
+			'sentinel' : values[0],
+			'struct_version_major' : values[1],
+			'struct_version_minor' : values[2],
+			'sdk_version_major' : values[3],
+			'sdk_version_minor' : values[4],
+			'app_version_major' : values[5],
+			'app_version_minor' : values[6],
+			'app_size' : values[7],
+			'offset' : values[8],
+			'crc' : values[9],
+			'app_name' : values[10].rstrip('\0'),
+			'company_name' : values[11].rstrip('\0'),
+			'icon_resource_id' : values[12],
+			'symbol_table_addr' : values[13],
+			'flags' : values[14],
+			'relocation_list_index' : values[15],
+			'num_relocation_entries' : values[16],
+			'uuid' : uuid.UUID(bytes=values[17])
+		}
+		return self.header
+
 
 	def close(self):
 		self.zip.close()
@@ -309,19 +365,28 @@ class Pebble(object):
 		if not async:
 			return EndpointSync(self, "APP_MANAGER").get_data()
 
-	def remove_app(self, appid, index):
+	def remove_app(self, appid, index, async=False):
 
 		"""Remove an installed application from the target app-bank."""
 
 		data = pack("!bII", 2, appid, index)
 		self._send_message("APP_MANAGER", data)
 
-	def remove_app_by_uuid(self, uuid):
+		if not async:
+			return EndpointSync(self, "APP_MANAGER").get_data()
+
+	def remove_app_by_uuid(self, uuid_to_remove, uuid_is_string=True, async = False):
 
 		"""Remove an installed application by UUID."""
 
-		data = pack("b", 0x02) + uuid
+		if not uuid_is_string:
+			uuid_to_remove = uuid_to_remove.bytes
+
+		data = pack("b", 0x02) + str(uuid_to_remove)
 		self._send_message("APP_MANAGER", data)
+
+		if not async:
+			return EndpointSync(self, "APP_MANAGER").get_data()
 
 	def get_time(self, async = False):
 
@@ -339,18 +404,46 @@ class Pebble(object):
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
-	def reinstall_app_by_name(self, name, pbz_path):
+
+	def reinstall_app(self, pbz_path):
 
 		"""
-		A convenience method to uninstall and install an app by app name.
+		A convenience method to uninstall and install an app
 
-		This will only work if the app hasn't changed names between the new and old versions.
+		If the UUID uninstallation method fails, app name in metadata will be used.
 		"""
+		def endpoint_check(result, pbz_path):
+			if result == 'app removed':
+				print result
+				return True
+			else:
+				if DEBUG_PROTOCOL:
+					log.warn("Failed to remove supplied app, app manager signal was: " + result)
+				return False
+
+		# get the bundle's metadata to identify the app being replaced
+		bundle = PebbleBundle(pbz_path)
+		if not bundle.is_app_bundle():
+			raise PebbleError(self.id, "This is not an app bundle")
+		app_metadata = bundle.get_app_metadata()
+
+		# attempt to remove an app by its UUID
+		result_uuid = self.remove_app_by_uuid(app_metadata['uuid'].bytes)
+		if endpoint_check(result_uuid, pbz_path):
+			return self.install_app(pbz_path)
+
+		if DEBUG_PROTOCOL:
+			log.warn("UUID removal failure, attempting to remove existing app by app name")
+
+		# attempt to remove an app by its name
 		apps = self.get_appbank_status()
 		for app in apps["apps"]:
-			if app["name"] == name:
-				self.remove_app(app["id"], app["index"])
-		self.install_app(pbz_path)
+			if app["name"] == app_metadata['app_name']:
+				result_name = self.remove_app(app["id"], app["index"])
+				if endpoint_check(result_name, pbz_path):
+					return self.install_app(pbz_path)
+
+		log.warn("Unable to locate previous instance of supplied application")
 
 	def reinstall_app_by_uuid(self, uuid, pbz_path):
 
@@ -542,6 +635,12 @@ class Pebble(object):
 		apps = {}
 		restype, = unpack("!b", data[0])
 
+		app_install_message = {
+			0: "app available",
+			1: "app removed",
+			2: "app updated"
+		}
+
 		if restype == 1:
 			apps["banks"], apps_installed = unpack("!II", data[1:9])
 			apps["apps"] = []
@@ -558,6 +657,11 @@ class Pebble(object):
 				offset += appinfo_size
 
 			return apps
+
+		elif restype == 2:
+			message_id = unpack("!I", data[1:])
+			message_id = int(''.join(map(str, message_id)))
+			return app_install_message[message_id]
 
 	def _version_response(self, endpoint, data):
 		fw_names = {
