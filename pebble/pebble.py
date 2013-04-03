@@ -467,51 +467,73 @@ class Pebble(object):
 			app_uuid = app_uuid.decode('hex')
 		elif type(app_uuid) is uuid.UUID:
 			app_uuid = app_uuid.bytes
-		# else, assume it's a byte array
+		#else we can assume it's a byte array
 
-		app_messages = {
-			"PUSH": b'\x01',
-			"REQUEST": b'\x02',
-			"ACK": b'\xFF',
-			"NACK": b'\x7F'
-		}
+		def build_tuple(key, data_type, data):
+			""" make a single app_message tuple"""
+			# available app message datatypes:
+			tuple_datatypes = {
+				"BYTE_ARRAY": b'\x00',
+				"CSTRIMG": b'\x01',
+				"UINT": b'\x02',
+				"INT": b'\x03'
+			}
+			# first build the message_tuple
+			app_message_tuple = OrderedDict([
+				("KEY", key),
+				("TYPE", tuple_datatypes[data_type]),
+				("LENGTH", pack('<H', len(data))),
+				("DATA", data)
+			])
+			# handle the little endians
+			app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
+			app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+			return app_message_tuple
 
-		app_message_tuple_data_types = {
-			"BYTE_ARRAY": b'\x00',
-			"CSTRIMG": b'\x01',
-			"UINT": b'\x02',
-			"INT": b'\x03'
-		}
+		def build_dict(list_of_tuples):
+			""" make a dictionary from a list of app_message tuples"""
+			# note that "TUPLE" can refer to 0 or more tuples. Tuples must be correct endian-ness already
+			tuple_total = []
+			tuple_total_bytes = ''
+			tuple_count = len(list_of_tuples)
+			# store all the tuples in a tuple
+			for i in range(1, tuple_count):
+				tuple_total.append(list_of_tuples[i])
+			# make the bytearray from the tuples
+			for elem in list_of_tuples:
+				tuple_total_bytes += ''.join(elem.values())
+			# now build the dict
+			app_message_dict = OrderedDict([
+				("TUPLECOUNT", pack('B', tuple_count)),
+				("TUPLE", tuple_total_bytes)
+			])
+			return app_message_dict
 
-		# first build the message_tuple
-		app_message_tuple = OrderedDict([
-			("KEY", launcher_keys["RUN_STATE_KEY"]),
-			("TYPE", app_message_tuple_data_types["UINT"]),
-			("LENGTH", b'\x00\x01'),
-			("DATA", launcher_key_values[key_value])
-		])
+		def build_message(dict_of_tuples, command, uuid, transaction_id=b'\x00'):
+			""" build the app_message indented for app with matching uuid"""
+			# NOTE: uuid must be a byte array
+			# available app_message commands:
+			app_messages = {
+				"PUSH": b'\x01',
+				"REQUEST": b'\x02',
+				"ACK": b'\xFF',
+				"NACK": b'\x7F'
+			}
+			# finally build the entire message
+			app_message = OrderedDict([
+				("COMMAND", app_messages[command]),
+				("TRANSACTIONID", transaction_id),
+				("UUID", uuid),
+				("DICT", ''.join(dict_of_tuples.values()))
+			])
+			return ''.join(app_message.values())
 
-		# handle the little endians
-		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
-		app_message_tuple["LENGTH"] = app_message_tuple["LENGTH"][::-1]
-		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
-
-		# now build the dict from the tuple(s)
-		app_message_dict = OrderedDict([
-			("TUPLECOUNT", b'\x01'),
-			("TUPLE", ''.join(app_message_tuple.values()))  # arbitrary size
-		])
-
-		# finally build the entire message
-		app_message = OrderedDict([
-			("COMMAND", app_messages["PUSH"]),
-			("TRANSACTIONID", b'\x00'),
-			("UUID", app_uuid),
-			("DICT", ''.join(app_message_dict.values()))
-		])
-		packed_message = ''.join(app_message.values())
-
+		# build and send a single tuple-sized launcher command
+		app_message_tuple = build_tuple(launcher_keys["RUN_STATE_KEY"], "UINT", launcher_key_values["RUNNING"])
+		app_message_dict = build_dict([app_message_tuple])  # we only have one tuple for now
+		packed_message = build_message(app_message_dict, "PUSH", app_uuid)
 		self._send_message("LAUNCHER", packed_message)
+
 		# wait for either ACK or NACK response
 		if not async:
 			return EndpointSync(self, "LAUNCHER").get_data()
