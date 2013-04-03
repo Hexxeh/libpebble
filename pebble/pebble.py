@@ -379,8 +379,11 @@ class Pebble(object):
 
 		"""Remove an installed application by UUID."""
 
-		if not uuid_is_string:
+		if uuid_to_remove is string:
+			uuid_to_remove = uuid_to_remove.decode('hex')
+		elif type(uuid_to_remove) is uuid.UUID:
 			uuid_to_remove = uuid_to_remove.bytes
+		# else, assume it's a byte array
 
 		data = pack("b", 0x02) + str(uuid_to_remove)
 		self._send_message("APP_MANAGER", data)
