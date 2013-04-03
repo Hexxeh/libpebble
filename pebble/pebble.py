@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import serial
+import signal
 import stm32_crc
 import struct
 import threading
@@ -22,8 +23,7 @@ logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
-
-DEBUG_PROTOCOL = False
+DEBUG_PROTOCOL = False	
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
@@ -49,7 +49,7 @@ class PebbleBundle(object):
 	def __init__(self, bundle_path):
 		bundle_abs_path = os.path.abspath(bundle_path)
 		if not os.path.exists(bundle_abs_path):
-			raise TypeError("Bundle does not exist: " + bundle_path)
+			raise Exception("Bundle does not exist: " + bundle_path)
 
 		self.zip = zipfile.ZipFile(bundle_abs_path)
 		self.path = bundle_abs_path
@@ -64,7 +64,7 @@ class PebbleBundle(object):
 			return self.manifest
 
 		if self.MANIFEST_FILENAME not in self.zip.namelist():
-			raise TypeError("Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME))
+			raise Exception("Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME))
 
 		self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
 		return self.manifest
@@ -99,7 +99,6 @@ class PebbleBundle(object):
 			'uuid' : uuid.UUID(bytes=values[17])
 		}
 		return self.header
-
 
 	def close(self):
 		self.zip.close()
@@ -222,6 +221,7 @@ class Pebble(object):
 		try:
 			if using_lightblue:
 				self._ser = LightBluePebble(self.id, pair_first)
+				signal.signal(signal.SIGINT, self._exit_signal_handler)
 			else:
 				devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
 				log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
@@ -236,6 +236,12 @@ class Pebble(object):
 			raise PebbleError(id, "Failed to connect to Pebble")
 		except:
 			raise
+
+	def _exit_signal_handler(self, signum, frame):
+		print "Disconnecting before exiting..."
+		self.disconnect()
+		time.sleep(1)
+		os._exit(0)
 
 	def __del__(self):
 		try:
@@ -421,7 +427,7 @@ class Pebble(object):
 				return True
 			else:
 				if DEBUG_PROTOCOL:
-					log.warn("Failed to remove supplied app, app manager signal was: " + result)
+					log.warn("Failed to remove supplied app, app manager message was: " + result)
 				return False
 
 		# get the bundle's metadata to identify the app being replaced
