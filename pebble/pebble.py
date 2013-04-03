@@ -379,7 +379,7 @@ class Pebble(object):
 
 		"""Remove an installed application by UUID."""
 
-		if uuid_to_remove is string:
+		if uuid_is_string:
 			uuid_to_remove = uuid_to_remove.decode('hex')
 		elif type(uuid_to_remove) is uuid.UUID:
 			uuid_to_remove = uuid_to_remove.bytes
