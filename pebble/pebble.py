@@ -10,8 +10,10 @@ import stm32_crc
 import threading
 import time
 import traceback
+import uuid
 import zipfile
 
+from collections import OrderedDict
 from LightBluePebble import LightBluePebble
 from struct import pack, unpack
 
@@ -116,6 +118,8 @@ class Pebble(object):
 		"SYSTEM_MESSAGE": 18,
 		"MUSIC_CONTROL": 32,
 		"PHONE_CONTROL": 33,
+		"APPLICATION_MESSAGE": 48,
+		"LAUNCHER": 49,
 		"LOGS": 2000,
 		"PING": 2001,
 		"LOG_DUMP": 2002,
@@ -158,6 +162,8 @@ class Pebble(object):
 			self.endpoints["PHONE_VERSION"]: self._phone_version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
+			self.endpoints["APPLICATION_MESSAGE"]: self._application_message_response,
+			self.endpoints["LAUNCHER"]: self._application_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
@@ -440,6 +446,75 @@ class Pebble(object):
 
 		self.system_message("FIRMWARE_COMPLETE")
 
+	def launcher_message(self, app_uuid, key_value, uuid_is_string = True, async = False):
+		""" send an appication message to launch or kill a specified application"""
+		# TODO replace with a recursive solution for x tuples which handles generic app messages with launcher as a special case
+		# ex: pebble.launcher_message(b'\x54\xD3\x00\x8F\x0E\x46\x46\x2C\x99\x5C\x0D\x0B\x4E\x01\x14\x8C',"RUNNING",False)
+
+		launcher_keys = {
+			"RUN_STATE_KEY": b'\x00\x00\x00\x01'
+		}
+
+		launcher_key_values = {
+			"NOT_RUNNING": b'\x00',
+			"RUNNING": b'\x01'
+		}
+
+		if key_value not in launcher_key_values:
+			raise PebbleError(self.id, "not a valid application message")
+
+		if uuid_is_string:
+			app_uuid = app_uuid.decode('hex')
+		elif type(app_uuid) is uuid.UUID:
+			app_uuid = uuid.bytes
+		# else, assume it's a byte array
+
+		app_messages = {
+			"PUSH": b'\x01',
+			"REQUEST": b'\x02',
+			"ACK": b'\xFF',
+			"NACK": b'\x7F'
+		}
+
+		app_message_tuple_data_types = {
+			"BYTE_ARRAY": b'\x00',
+			"CSTRIMG": b'\x01',
+			"UINT": b'\x02',
+			"INT": b'\x03'
+		}
+
+		# first build the message_tuple
+		app_message_tuple = OrderedDict([
+			("KEY", launcher_keys["RUN_STATE_KEY"]),
+			("TYPE", app_message_tuple_data_types["UINT"]),
+			("LENGTH", b'\x00\x01'),
+			("DATA", launcher_key_values[key_value])
+		])
+
+		# handle the little endians
+		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
+		app_message_tuple["LENGTH"] = app_message_tuple["LENGTH"][::-1]
+		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+
+		# now build the dict from the tuple(s)
+		app_message_dict = OrderedDict([
+			("TUPLECOUNT", b'\x01'),
+			("TUPLE", ''.join(app_message_tuple.values()))  # arbitrary size
+		])
+
+		# finally build the entire message
+		app_message = OrderedDict([
+			("COMMAND", app_messages["PUSH"]),
+			("TRANSACTIONID", b'\x00'),
+			("UUID", app_uuid),
+			("DICT", ''.join(app_message_dict.values()))
+		])
+		packed_message = ''.join(app_message.values())
+
+		self._send_message("LAUNCHER", packed_message)
+		# wait for either ACK or NACK response
+		if not async:
+			return EndpointSync(self, "LAUNCHER").get_data()
 
 	def system_message(self, command):
 
@@ -579,6 +654,26 @@ class Pebble(object):
 		resp["btmac"] = ":".join([btmac_hex[i:i+2].upper() for i in reversed(xrange(0, 12, 2))])
 
 		return resp
+
+	def _application_message_response(self, endpoint, data):
+		# TODO: wrap in a putbytes-style client for fast transfer speeds without checking "ACK"/"NACK"
+		# grab the first byte from the data bytearray
+		firstbyte = data[0]
+
+		app_messages = {
+			b'\x01': "PUSH",
+			b'\x02': "REQUEST",
+			b'\xFF': "ACK",
+			b'\x7F': "NACK"
+		}
+
+		if len(data) > 1:
+			rest = data[1:]
+		else:
+			rest = ''
+		if firstbyte in app_messages:
+			return app_messages[firstbyte] + rest
+
 
 	def _phone_version_response(self, endpoint, data):
 		session_cap = {
