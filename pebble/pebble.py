@@ -466,7 +466,7 @@ class Pebble(object):
 		if uuid_is_string:
 			app_uuid = app_uuid.decode('hex')
 		elif type(app_uuid) is uuid.UUID:
-			app_uuid = uuid.bytes
+			app_uuid = app_uuid.bytes
 		# else, assume it's a byte array
 
 		app_messages = {
