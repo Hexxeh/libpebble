@@ -148,7 +148,27 @@ class Pebble(object):
 					key code 123 using command down
 				end tell'		
 				"""
-		]
+		],
+                "POWERPOINT": [
+                                """
+                                osascript -e 'tell application "Microsoft PowerPoint"
+					activate
+					run slide show slide show settings of active presentation
+                                end tell'
+                                """,
+                                """
+                                osascript -e 'tell application "Microsoft PowerPoint"
+					activate
+					go to next slide slide show view of slide show window 1
+                                end tell'
+                                """,
+                                """
+                                osascript -e 'tell application "Microsoft PowerPoint"
+                                       activate
+                                       go to previous slide slide show view of slide show window 1
+                                end tell'
+                                """
+                ] 
 	}
 
 	endpoints = {
@@ -516,7 +536,8 @@ class Pebble(object):
 	def remote(self, remote_app):
 		app_string = {
 			"ITUNES" : "iTunes",
-			"KEYNOTE" : "Keynote"
+			"KEYNOTE" : "Keynote",
+			"POWERPOINT" : "PowerPoint"
 		}
 		self._remote_app = remote_app.upper()
 		log.info("Remote: Control " + app_string[self._remote_app] + " with Pebble" )
