@@ -109,7 +109,7 @@ def main():
     set_time_parser.set_defaults(func=cmd_set_time)
 
     remote_parser = subparsers.add_parser('remote', help='remote control Mac applications')
-    remote_parser.add_argument('app', metavar='APP', choices=('itunes', 'keynote'), type=str, help='either itunes or keynote')
+    remote_parser.add_argument('app', metavar='APP', choices=('itunes', 'keynote', 'powerpoint'), type=str, help='either itunes or keynote')
     remote_parser.set_defaults(func=cmd_remote)
 
     args = parser.parse_args()
