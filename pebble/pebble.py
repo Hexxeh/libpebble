@@ -2,6 +2,7 @@
 
 import binascii
 import glob
+import itertools
 import json
 import logging
 import os
@@ -470,8 +471,8 @@ class Pebble(object):
 		amsg = AppMessage()
 
 		# build and send a single tuple-sized launcher command
-		app_message_tuple = amsg.build_tuple(launcher_keys["RUN_STATE_KEY"], "UINT", launcher_key_values["RUNNING"])
-		app_message_dict = amsg.build_dict([app_message_tuple])  # we only have one tuple for now
+		app_message_tuple = amsg.build_tuple(launcher_keys["RUN_STATE_KEY"], "UINT", launcher_key_values[key_value])
+		app_message_dict = amsg.build_dict(app_message_tuple)
 		packed_message = amsg.build_message(app_message_dict, "PUSH", app_uuid)
 		self._send_message("LAUNCHER", packed_message)
 
@@ -619,10 +620,6 @@ class Pebble(object):
 		return resp
 
 	def _application_message_response(self, endpoint, data):
-		# TODO: wrap in a putbytes-style client for fast transfer speeds without checking "ACK"/"NACK"
-		# grab the first byte from the data bytearray
-		firstbyte = data[0]
-
 		app_messages = {
 			b'\x01': "PUSH",
 			b'\x02': "REQUEST",
@@ -634,8 +631,8 @@ class Pebble(object):
 			rest = data[1:]
 		else:
 			rest = ''
-		if firstbyte in app_messages:
-			return app_messages[firstbyte] + rest
+		if data[0] in app_messages:
+			return app_messages[data[0]] + rest
 
 
 	def _phone_version_response(self, endpoint, data):
@@ -707,18 +704,12 @@ class AppMessage(object):
 		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
 		return app_message_tuple
 
-	def build_dict(self, list_of_tuples):
+	def build_dict(self, tuple_of_tuples):
 		""" make a dictionary from a list of app_message tuples"""
 		# note that "TUPLE" can refer to 0 or more tuples. Tuples must be correct endian-ness already
-		tuple_total = []
-		tuple_total_bytes = ''
-		tuple_count = len(list_of_tuples)
-		# store all the tuples in a tuple
-		for i in range(1, tuple_count):
-			tuple_total.append(list_of_tuples[i])
-		# make the bytearray from the tuples
-		for elem in list_of_tuples:
-			tuple_total_bytes += ''.join(elem.values())
+		tuple_count = len(tuple_of_tuples)
+		# make the bytearray from the flattened tuples
+		tuple_total_bytes = ''.join(item for item in itertools.chain(*tuple_of_tuples.values()))
 		# now build the dict
 		app_message_dict = OrderedDict([
 			("TUPLECOUNT", pack('B', tuple_count)),
@@ -727,7 +718,7 @@ class AppMessage(object):
 		return app_message_dict
 
 	def build_message(self, dict_of_tuples, command, uuid, transaction_id=b'\x00'):
-		""" build the app_message indented for app with matching uuid"""
+		""" build the app_message intended for app with matching uuid"""
 		# NOTE: uuid must be a byte array
 		# available app_message commands:
 		app_messages = {
