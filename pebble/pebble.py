@@ -2,6 +2,7 @@
 
 import binascii
 import glob
+import itertools
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ import traceback
 import uuid
 import zipfile
 
+from collections import OrderedDict
 from LightBluePebble import LightBluePebble
 from struct import pack, unpack
 
@@ -171,6 +173,8 @@ class Pebble(object):
 		"SYSTEM_MESSAGE": 18,
 		"MUSIC_CONTROL": 32,
 		"PHONE_CONTROL": 33,
+		"APPLICATION_MESSAGE": 48,
+		"LAUNCHER": 49,
 		"LOGS": 2000,
 		"PING": 2001,
 		"LOG_DUMP": 2002,
@@ -213,6 +217,8 @@ class Pebble(object):
 			self.endpoints["PHONE_VERSION"]: self._phone_version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
+			self.endpoints["APPLICATION_MESSAGE"]: self._application_message_response,
+			self.endpoints["LAUNCHER"]: self._application_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
@@ -552,6 +558,38 @@ class Pebble(object):
 
 		self.system_message("FIRMWARE_COMPLETE")
 
+	def launcher_message(self, app_uuid, key_value, uuid_is_string = True, async = False):
+		""" send an appication message to launch or kill a specified application"""
+
+		launcher_keys = {
+			"RUN_STATE_KEY": b'\x00\x00\x00\x01'
+		}
+
+		launcher_key_values = {
+			"NOT_RUNNING": b'\x00',
+			"RUNNING": b'\x01'
+		}
+
+		if key_value not in launcher_key_values:
+			raise PebbleError(self.id, "not a valid application message")
+
+		if uuid_is_string:
+			app_uuid = app_uuid.decode('hex')
+		elif type(app_uuid) is uuid.UUID:
+			app_uuid = app_uuid.bytes
+		#else we can assume it's a byte array
+
+		amsg = AppMessage()
+
+		# build and send a single tuple-sized launcher command
+		app_message_tuple = amsg.build_tuple(launcher_keys["RUN_STATE_KEY"], "UINT", launcher_key_values[key_value])
+		app_message_dict = amsg.build_dict(app_message_tuple)
+		packed_message = amsg.build_message(app_message_dict, "PUSH", app_uuid)
+		self._send_message("LAUNCHER", packed_message)
+
+		# wait for either ACK or NACK response
+		if not async:
+			return EndpointSync(self, "LAUNCHER").get_data()
 
 	def system_message(self, command):
 
@@ -703,6 +741,22 @@ class Pebble(object):
 
 		return resp
 
+	def _application_message_response(self, endpoint, data):
+		app_messages = {
+			b'\x01': "PUSH",
+			b'\x02': "REQUEST",
+			b'\xFF': "ACK",
+			b'\x7F': "NACK"
+		}
+
+		if len(data) > 1:
+			rest = data[1:]
+		else:
+			rest = ''
+		if data[0] in app_messages:
+			return app_messages[data[0]] + rest
+
+
 	def _phone_version_response(self, endpoint, data):
 		session_cap = {
 			"GAMMA_RAY" : 0x80000000,
@@ -747,6 +801,63 @@ class Pebble(object):
 		}
 
 		return event_names[event] if event in event_names else None
+
+
+class AppMessage(object):
+# tools to build a valid app message
+	def build_tuple(self, key, data_type, data):
+		""" make a single app_message tuple"""
+		# available app message datatypes:
+		tuple_datatypes = {
+			"BYTE_ARRAY": b'\x00',
+			"CSTRIMG": b'\x01',
+			"UINT": b'\x02',
+			"INT": b'\x03'
+		}
+		# first build the message_tuple
+		app_message_tuple = OrderedDict([
+			("KEY", key),
+			("TYPE", tuple_datatypes[data_type]),
+			("LENGTH", pack('<H', len(data))),
+			("DATA", data)
+		])
+		# handle the little endians
+		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
+		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+		return app_message_tuple
+
+	def build_dict(self, tuple_of_tuples):
+		""" make a dictionary from a list of app_message tuples"""
+		# note that "TUPLE" can refer to 0 or more tuples. Tuples must be correct endian-ness already
+		tuple_count = len(tuple_of_tuples)
+		# make the bytearray from the flattened tuples
+		tuple_total_bytes = ''.join(item for item in itertools.chain(*tuple_of_tuples.values()))
+		# now build the dict
+		app_message_dict = OrderedDict([
+			("TUPLECOUNT", pack('B', tuple_count)),
+			("TUPLE", tuple_total_bytes)
+		])
+		return app_message_dict
+
+	def build_message(self, dict_of_tuples, command, uuid, transaction_id=b'\x00'):
+		""" build the app_message intended for app with matching uuid"""
+		# NOTE: uuid must be a byte array
+		# available app_message commands:
+		app_messages = {
+			"PUSH": b'\x01',
+			"REQUEST": b'\x02',
+			"ACK": b'\xFF',
+			"NACK": b'\x7F'
+		}
+		# finally build the entire message
+		app_message = OrderedDict([
+			("COMMAND", app_messages[command]),
+			("TRANSACTIONID", transaction_id),
+			("UUID", uuid),
+			("DICT", ''.join(dict_of_tuples.values()))
+		])
+		return ''.join(app_message.values())
+
 
 class PutBytesClient(object):
 	states = {
