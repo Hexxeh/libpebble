@@ -17,7 +17,7 @@ Getting started - Mac OSX
 -------------------------
 When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
 
-###Additional Dependancies
+###Additional Dependencies
 * `PyObjC` which can be installed via [pip](https://pypi.python.org/pypi/pip)
 * `Xcode 2.1 or later` to build LightAquaBlue framework
 * OSX 10.4 or later to perform MAC Address discovery
