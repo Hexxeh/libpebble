@@ -55,7 +55,7 @@ _Automated pairing via `--pair` on linux is not currently supported_
 * From the `libpebble-dev` folder, execute the following: `./p.py --lightblue get_time`
 * Note that if no `--pebble_id` is specified before the command, you are provided with a GUI selection tool.
 * For example: `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
-* The `--pebble_id` can also be the 4 letter firendly name of your pebble but this will still be slower than passing the MAC Address.
+* The `--pebble_id` can also be the 4 letter friendly name of your pebble but this will still be slower than passing the MAC Address.
 
 Getting started - Debian
 ------------------------
