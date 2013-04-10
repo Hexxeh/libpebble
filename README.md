@@ -29,7 +29,7 @@ When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
 * Note that if a MAC address is supplied, initialization time is reduced. 
     * For example:  `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
       where `00:11:22:33:44:55:66` is the Pebble's MAC Address, viewable on the Pebble from `settings`-->`about`
-* The `--pebble_id` can also be the 4 letter firendly name of your pebble but this will require that the Pebble is broadcasting.
+* The `--pebble_id` can also be the 4 letter friendly name of your pebble but this will require that the Pebble is broadcasting.
 
 ###Using libpebble without --lightblue on OSX
 _NOT RECOMMENDED. MAY CAUSE KERNEL PANICS ON OSX 10.8.X_
