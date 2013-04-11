@@ -8,9 +8,9 @@ Getting started
 
 I've only tested this on OS X 10.8. Things will be a little different on other platforms. Firstly make sure you have Python and PySerial installed.
 
-Next, pair your Pebble to your computer and make sure it's setup as a serial port. For me, it gets exposed as /dev/tty.Pebble402F-SerialPortSe. If this is different for you, you'll need to edit pebble.py. The 402F bit is my Pebble's ID. You can just run pebble.py with your ID as an argument if the rest of that path matches.
+Next, pair your Pebble to your computer and make sure it's setup as a serial port. For me, it gets exposed as /dev/tty.Pebble402F-SerialPortSe. If this is different for you anywhere but in 402F, you'll need to edit pebble.py. The 402F bit is my Pebble's ID. You can just run pebble.py with your ID as an argument if the rest of that path matches.
 
-Once you're paired and the serial port is setup, try running pebble.py. You should get a notification on your Pebble to test that it works properly.
+Once you're paired and the serial port is setup, try running `p.py ping`. You should get a notification on your Pebble to test that it works properly. It sometimes helps to tell the Pebble App to disconnect from the Pebble first.
 
 Join #pebble on Freenode IRC to let me know how you get on and share your creations!
 
