@@ -420,7 +420,7 @@ class Pebble(object):
 		self._send_message("TIME", data)
 
 
-	def reinstall_app(self, pbz_path):
+	def reinstall_app(self, pbz_path, launch_on_install=True):
 
 		"""
 		A convenience method to uninstall and install an app
@@ -443,9 +443,9 @@ class Pebble(object):
 		app_metadata = bundle.get_app_metadata()
 
 		# attempt to remove an app by its UUID
-		result_uuid = self.remove_app_by_uuid(app_metadata['uuid'].bytes)
+		result_uuid = self.remove_app_by_uuid(app_metadata['uuid'].bytes, uuid_is_string=False)
 		if endpoint_check(result_uuid, pbz_path):
-			return self.install_app(pbz_path)
+			return self.install_app(pbz_path, launch_on_install)
 
 		if DEBUG_PROTOCOL:
 			log.warn("UUID removal failure, attempting to remove existing app by app name")
@@ -456,7 +456,7 @@ class Pebble(object):
 			if app["name"] == app_metadata['app_name']:
 				result_name = self.remove_app(app["id"], app["index"])
 				if endpoint_check(result_name, pbz_path):
-					return self.install_app(pbz_path)
+					return self.install_app(pbz_path, launch_on_install)
 
 		log.warn("Unable to locate previous instance of supplied application")
 
@@ -470,7 +470,7 @@ class Pebble(object):
 		self.remove_app_by_uuid(uuid)
 		self.install_app(pbz_path)
 
-	def install_app(self, pbz_path):
+	def install_app(self, pbz_path, launch_on_install=True):
 
 		"""
 		Install an app bundle (*.pbw) to the target Pebble.
@@ -481,12 +481,11 @@ class Pebble(object):
 		bundle = PebbleBundle(pbz_path)
 		if not bundle.is_app_bundle():
 			raise PebbleError(self.id, "This is not an app bundle")
+		app_metadata = bundle.get_app_metadata()
 
-		binary = bundle.zip.read(
-			bundle.get_application_info()['name'])
+		binary = bundle.zip.read(bundle.get_application_info()['name'])
 		if bundle.has_resources():
-			resources = bundle.zip.read(
-				bundle.get_resources_info()['name'])
+			resources = bundle.zip.read(bundle.get_resources_info()['name'])
 		else:
 			resources = None
 
@@ -524,6 +523,8 @@ class Pebble(object):
 		self._add_app(first_free)
 		time.sleep(2)
 
+		if launch_on_install:
+			self.launcher_message(app_metadata['uuid'].bytes, "RUNNING", uuid_is_string=False)
 
 	def install_firmware(self, pbz_path, recovery=False):
 
@@ -615,7 +616,7 @@ class Pebble(object):
 		log.debug("Sending command %s (code %d)" % (command, commands[command]))
 		self._send_message("SYSTEM_MESSAGE", data)
 
-	def ping(self, cookie = 0, async = False):
+	def ping(self, cookie = 0xDEC0DE, async = False):
 
 		"""Send a 'ping' to the watch to test connectivity."""
 
