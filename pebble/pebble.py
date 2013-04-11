@@ -21,7 +21,7 @@ log.setLevel(logging.DEBUG)
 
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 
-DEBUG_PROTOCOL = True
+DEBUG_PROTOCOL = False
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
