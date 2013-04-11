@@ -616,7 +616,7 @@ class Pebble(object):
 		log.debug("Sending command %s (code %d)" % (command, commands[command]))
 		self._send_message("SYSTEM_MESSAGE", data)
 
-	def ping(self, cookie = 0, async = False):
+	def ping(self, cookie = 0xDEC0DE, async = False):
 
 		"""Send a 'ping' to the watch to test connectivity."""
 
