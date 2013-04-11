@@ -21,7 +21,7 @@ log.setLevel(logging.DEBUG)
 
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 
-DEBUG_PROTOCOL = False
+DEBUG_PROTOCOL = True
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
@@ -199,6 +199,11 @@ class Pebble(object):
 			raise PebbleError(self.id, "Lost connection to Pebble")
 			self._alive = False
 
+	def _pack_message_data(self, lead, parts):
+		pascal = map(lambda x: x[:255], parts)
+		d = pack("b" + reduce(lambda x,y: str(x) + "p" + str(y), map(lambda x: len(x) + 1, pascal)) + "p", lead, *pascal)
+		return d
+
 	def _build_message(self, endpoint, data):
 		return pack("!HH", len(data), endpoint)+data
 
@@ -240,33 +245,22 @@ class Pebble(object):
 
 		ts = str(int(time.time())*1000)
 		parts = [sender, body, ts]
-		data = "\x01"
-		for part in parts:
-			data += pack("!b", len(part))+part
-		self._send_message("NOTIFICATION", data)
+		self._send_message("NOTIFICATION", self._pack_message_data(1, parts))
 
 	def notification_email(self, sender, subject, body):
 
 		"""Send an 'Email Notification' to the displayed on the watch."""
 
 		ts = str(int(time.time())*1000)
-		parts = [sender, subject, ts, body]
-		data = "\x00"
-		for part in parts:
-			data += pack("!b", len(part))+part
-		self._send_message("NOTIFICATION", data)
+		parts = [sender, body, ts, subject]
+		self._send_message("NOTIFICATION", self._pack_message_data(0, parts))
 
 	def set_nowplaying_metadata(self, track, album, artist):
 
 		"""Update the song metadata displayed in Pebble's music app."""
 
-		parts = [artist, album, track]
-
-		data = pack("!b", 16)
-		for part in parts:
-			part = part[0:29] if len(part) > 30 else part
-			data += pack("!b", len(part))+part
-		self._send_message("MUSIC_CONTROL", data)
+		parts = [artist[:30], album[:30], track[:30]]
+		self._send_message("MUSIC_CONTROL", self._pack_message_data(16, parts))
 
 	def get_versions(self, async = False):
 
