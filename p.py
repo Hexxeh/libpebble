@@ -13,7 +13,7 @@ def cmd_ping(pebble, args):
     pebble.ping(cookie=0xDEADBEEF)
 
 def cmd_load(pebble, args):
-    pebble.install_app(args.app_bundle)
+    pebble.install_app(args.app_bundle, args.nolaunch)
 
 def cmd_load_fw(pebble, args):
     pebble.install_firmware(args.fw_bundle)
@@ -98,7 +98,7 @@ def cmd_rm_app(pebble, args):
         print 'Invalid arguments. Use bank index or hex app UUID (16 bytes / 32 hex digits)'
 
 def cmd_reinstall_app(pebble, args):
-    pebble.reinstall_app(args.app_bundle)
+    pebble.reinstall_app(args.app_bundle, args.nolaunch)
 
 def cmd_reset(pebble, args):
     pebble.reset()
@@ -134,6 +134,7 @@ def main():
     launch_parser.set_defaults(func=cmd_launch_app)
 
     load_parser = subparsers.add_parser('load', help='load an app onto a connected watch')
+    load_parser.add_argument('--nolaunch', action="store_false", help='do not launch the application after install')
     load_parser.add_argument('app_bundle', metavar='FILE', type=str, help='a compiled app bundle')
     load_parser.set_defaults(func=cmd_load)
 
@@ -147,12 +148,13 @@ def main():
     list_apps_parser = subparsers.add_parser('list', help='list installed apps')
     list_apps_parser.set_defaults(func=cmd_list_apps)
 
-    rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
+    rm_app_parser = subparsers.add_parser('rm', help='remove installed app')
     rm_app_parser.add_argument('app_index_or_hex_uuid', metavar='IDX or UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C', type=str, help='the app index or UUID to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
 
-    reinstall_app_parser = subparsers.add_parser('reinstall', help='reinstall an installed app')
+    reinstall_app_parser = subparsers.add_parser('reinstall', help='reinstall then launch an installed app')
     reinstall_app_parser.add_argument('app_bundle', metavar='FILE', type=str, help='a compiled app bundle')
+    reinstall_app_parser.add_argument('--nolaunch', action="store_false", help='do not launch the application after install')
     reinstall_app_parser.set_defaults(func=cmd_reinstall_app)
 
     reset_parser = subparsers.add_parser('reset', help='reset the watch remotely')
