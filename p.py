@@ -82,6 +82,9 @@ def cmd_rm_app(pebble, args):
 def cmd_reset(pebble, args):
     pebble.reset()
 
+def cmd_set_nowplaying_metadata(pebble, args):
+    pebble.set_nowplaying_metadata(args.track, args.album, args.artist)
+
 def cmd_notification_email(pebble, args):
     pebble.notification_email(args.sender, args.subject, args.body)
 
@@ -123,6 +126,12 @@ def main():
 
     reset_parser = subparsers.add_parser('reset', help='reset the watch remotely')
     reset_parser.set_defaults(func=cmd_reset)
+
+    set_nowplaying_metadata_parser = subparsers.add_parser('playing', help='set current music playing')
+    set_nowplaying_metadata_parser.add_argument('track', type=str)
+    set_nowplaying_metadata_parser.add_argument('album', type=str)
+    set_nowplaying_metadata_parser.add_argument('artist', type=str)
+    set_nowplaying_metadata_parser.set_defaults(func=cmd_set_nowplaying_metadata)
 
     notification_email_parser = subparsers.add_parser('email', help='send an "Email Notification"')
     notification_email_parser.add_argument('sender', type=str)
