@@ -21,6 +21,9 @@ def cmd_load_fw(pebble, args):
     print 'resetting to apply firmware update...'
     pebble.reset()
 
+def cmd_launch_app(pebble, args):
+    pebble.launcher_message(args.app_uuid, "RUNNING")
+
 def cmd_remote(pebble, args):
     def do_oscacript(command):
         cmd = "osascript -e 'tell application \""+args.app_name+"\" to "+command+"'"
@@ -79,7 +82,7 @@ def cmd_rm_app(pebble, args):
     try:
         uuid = args.app_index_or_hex_uuid.decode('hex')
         if len(uuid) == 16:
-            pebble.remove_app_by_uuid(uuid)
+            pebble.remove_app_by_uuid(uuid, uuid_is_string=False)
             print 'removed app'
             return 0
     except:
@@ -126,6 +129,10 @@ def main():
     ping_parser = subparsers.add_parser('ping', help='send a ping message')
     ping_parser.set_defaults(func=cmd_ping)
 
+    launch_parser = subparsers.add_parser('launch_app', help='launch an app on the watch by its UUID')
+    launch_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
+    launch_parser.set_defaults(func=cmd_launch_app)
+
     load_parser = subparsers.add_parser('load', help='load an app onto a connected watch')
     load_parser.add_argument('app_bundle', metavar='FILE', type=str, help='a compiled app bundle')
     load_parser.set_defaults(func=cmd_load)
@@ -141,7 +148,7 @@ def main():
     list_apps_parser.set_defaults(func=cmd_list_apps)
 
     rm_app_parser = subparsers.add_parser('rm', help='remove installed apps')
-    rm_app_parser.add_argument('app_index_or_hex_uuid', metavar='IDX or UUID', type=str, help='the app index or UUID to delete')
+    rm_app_parser.add_argument('app_index_or_hex_uuid', metavar='IDX or UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C', type=str, help='the app index or UUID to delete')
     rm_app_parser.set_defaults(func=cmd_rm_app)
 
     reinstall_app_parser = subparsers.add_parser('reinstall', help='reinstall an installed app')
@@ -187,7 +194,12 @@ def main():
             time.sleep(5)
             attempts += 1
 
-    args.func(pebble, args)
+    try:
+        args.func(pebble, args)
+    except Exception as e:
+        pebble.disconnect()
+        raise e
+        return
 
     pebble.disconnect()
 
