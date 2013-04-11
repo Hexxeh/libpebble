@@ -6,9 +6,8 @@ Interact with your Pebble from OSX, Ubuntu or Debian operating systems.
 
 * Supported OS's are `OSX 10.8`, `Ubuntu`, `Debian`
 * OS's which can utilize a faster bluetooth library, Lightblue-0.4, are `OSX 10.8` and `Ubuntu`
-* Lightblue installation instructions for earlier version of OSX (10.6) and other OS's can be found [here](http://lightblue.sourceforge.net/#downloads)
+* Detailed Lightblue-0.4 installation instructions for earlier version of OSX (10.6) and other OS's can be found [here](http://lightblue.sourceforge.net/#downloads)
 
--------------------------
 
 ##1. Install Dependancies
 
@@ -16,13 +15,13 @@ All supported OS's will require `python 2.7` to operate libpebble. It can be ins
 
 ###a. OSX Additional Dependencies
 
-Installing lightblue-0.4 in OSX will require the following be installed:
+Installing Lightblue-0.4 in OSX will require the following be installed:
 * `PyObjC` which can be installed via [pip](https://pypi.python.org/pypi/pip)
 * `Xcode 2.1 or later` to build LightAquaBlue framework
 
-###b. Ubunutu Additional Dependencies
+###b. Ubuntu Additional Dependencies
 
-Installing lightblue-0.4 in Ubuntu requires some extra dependancies be installed via `apt-get install`:
+Installing Lightblue-0.4 in Ubuntu requires some extra dependancies be installed via `apt-get install`:
 * `python-dev`
 * `libopenobex1-dev`
 * `python-tk` if you wish to use the GUI selection tool
@@ -43,29 +42,30 @@ Support for lightblue is untested in Debian, however the following should be ins
 
 * Note that you may have to run libpebble as root with `sudo python pebble.py` in Debian
 
--------------------------
 
 ##2. Install Libpebble and Lightblue
 
 * To install libpebble, clone the current libpebble with lightblue support from `git@github.com:pebble/libpebble.git` to a location of your choosing
-* If lightblue is being installed clone `lightblue-0.4` from `https://github.com/pebble/lightblue-0.4` and then
+* To install lightblue clone `lightblue-0.4` from `https://github.com/pebble/lightblue-0.4` and then:
     * `cd lightblue-0.4`
     * `sudo python setup.py install`
 
--------------------------
 
 ##3. Testing the Connection
+Note: you should have your bluetooth module enabled before continuing
 
 ###a. OSX
-#####Using libpebble with --lightblue on OSX
 When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
+
+#####Using libpebble with --lightblue on OSX
+* First install the OSX dependancies, general dependancies and lightblue
 * From the `libpebble-dev` folder, execute the following: `./p.py --lightblue --pair get_time`
 * Note that if no `--pebble_id` is specified before the command, you are provided with a GUI selection tool.
 * Note that if a MAC address is supplied, initialization time is reduced. 
     * For example:  `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
       where `00:11:22:33:44:55:66` is the Pebble's MAC Address, viewable on the Pebble from `settings`-->`about`
 * You can obtain your pebble's MAC address after a successful connection in the libpebble stdout debug logs
-* The `--pebble_id` can also be the 4 letter firendly name of your pebble but this will require that the Pebble is broadcasting.
+* The `--pebble_id` can also be the 4 letter friendly name of your pebble but this will require that the Pebble is broadcasting.
 
 #####Using libpebble without --lightblue on OSX (MAY CAUSE KERNEL PANICS)
 
@@ -75,20 +75,27 @@ When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
 
 ### b. Ubuntu
 
-_Automated pairing via `--pair` on linux is not currently supported_
+_Automated pairing via `--pair` is not currently supported in Ubuntu_
 
 * First install the Ubuntu dependancies, general dependancies and lightblue
 * In Ubuntu's `Menu`-->`Settings`-->`Connectivity`-->`Bluetooth` dialog, pair with your Pebble
 * From the `libpebble-dev` folder, execute the following: `./p.py --lightblue get_time`
 * Note that if no `--pebble_id` is specified before the command, you are provided with a GUI selection tool.
 * For example: `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
-* The `--pebble_id` can also be the 4 letter firendly name of your pebble but this will still be slower than passing the MAC Address.
+* The `--pebble_id` can also be the 4 letter friendly name of your pebble but this require that the Pebble is broadcasting.
 
-### b. Debian
+## Applications
+* Note that applications each have a unique UUID which is used to launch on install/re-install, it should be visible in the source for your application. 
+* Once an application is installed or re-installed it will be launched automatically. Disable this with `--nolaunch`
+	* for example `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue reinstall brains.pbw --nolaunch`
 
-_Please note the following was tested on Linux Mint 13, but should be valid for any Debian based distro_
-* `./p.py --pebble_id 123A get_time`
+#####Installing:
+* From your libpebble directory, execute `p.py` with the argument `load <path-to-valid-app>` 
+	* for example: `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue load brains.pbw`
 
+#####Re-installing
+* To re-install an application, execute `p.py` with the argument `reinstall <path-to-valid-app>`. This will attempt to remove the application by its UUID or, if that fails, the name of the application before installing it once more.
+	* for example: `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue reinstall brains.pbw`
 
 Functionality
 -------------
