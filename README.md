@@ -12,6 +12,7 @@ Interact with your Pebble from OSX, Ubuntu or Debian operating systems.
 ##1. Install Dependencies
 
 All supported OS's will require `python 2.7` to operate libpebble. It can be installed [here](http://www.python.org/download/releases/2.7/)
+* `Pyserial`will also be required, is can be installed via [pip](https://pypi.python.org/pypi/pip)
 
 ###a. OSX Additional Dependencies
 
@@ -49,6 +50,7 @@ Support for lightblue is untested in Debian, however the following should be ins
 * To install lightblue clone `lightblue-0.4` from `https://github.com/pebble/lightblue-0.4` and then:
     * `cd lightblue-0.4`
     * `sudo python setup.py install`
+* _NOTE_ in OSX 10.8.3, you should instead clone `lightblue-0.4` from `https://github.com/pipt/lightblue-0.4` which contains some fixes. The installation steps are the same as with `pebble/libpebble.git` 
 
 
 ##3. Testing the Connection
