@@ -2,17 +2,22 @@
 
 import binascii
 import glob
+import itertools
 import json
 import logging
 import os
 import serial
+import signal
 import stm32_crc
-import sys
+import struct
 import threading
 import time
 import traceback
+import uuid
 import zipfile
 
+from collections import OrderedDict
+from LightBluePebble import LightBluePebble
 from struct import pack, unpack
 
 log = logging.getLogger()
@@ -20,30 +25,82 @@ logging.basicConfig(format='[%(levelname)-8s] %(message)s')
 log.setLevel(logging.DEBUG)
 
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
-
-DEBUG_PROTOCOL = False
+DEBUG_PROTOCOL = False	
 
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
 
+	STRUCT_DEFINITION = [
+		'8s',   # header
+		'2B',   # struct version
+		'2B',   # sdk version
+		'2B',   # app version
+		'H',    # size
+		'I',    # offset
+		'I',    # crc
+		'32s',  # app name
+		'32s',  # company name
+		'I',    # icon resource id
+		'I',    # symbol table address
+		'I',    # flags
+		'I',    # relocation list start
+		'I',    # num relocation list entries
+		'16s'   # uuid
+	]
+
 	def __init__(self, bundle_path):
 		bundle_abs_path = os.path.abspath(bundle_path)
 		if not os.path.exists(bundle_abs_path):
-			raise "Bundle does not exist: " + bundle_path
+			raise Exception("Bundle does not exist: " + bundle_path)
 
 		self.zip = zipfile.ZipFile(bundle_abs_path)
 		self.path = bundle_abs_path
 		self.manifest = None
+		self.header = None
+
+		self.app_metadata_struct = struct.Struct(''.join(self.STRUCT_DEFINITION))
+		self.app_metadata_length_bytes = self.app_metadata_struct.size
 
 	def get_manifest(self):
 		if (self.manifest):
 			return self.manifest
 
 		if self.MANIFEST_FILENAME not in self.zip.namelist():
-			raise "Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME)
+			raise Exception("Could not find {}; are you sure this is a PebbleBundle?".format(self.MANIFEST_FILENAME))
 
 		self.manifest = json.loads(self.zip.read(self.MANIFEST_FILENAME))
 		return self.manifest
+
+	def get_app_metadata(self):
+
+		if (self.header):
+			return self.header
+
+		app_bin = self.zip.open('pebble-app.bin').read()
+
+		header = app_bin[0:self.app_metadata_length_bytes]
+		values = self.app_metadata_struct.unpack(header)
+		self.header = {
+			'sentinel' : values[0],
+			'struct_version_major' : values[1],
+			'struct_version_minor' : values[2],
+			'sdk_version_major' : values[3],
+			'sdk_version_minor' : values[4],
+			'app_version_major' : values[5],
+			'app_version_minor' : values[6],
+			'app_size' : values[7],
+			'offset' : values[8],
+			'crc' : values[9],
+			'app_name' : values[10].rstrip('\0'),
+			'company_name' : values[11].rstrip('\0'),
+			'icon_resource_id' : values[12],
+			'symbol_table_addr' : values[13],
+			'flags' : values[14],
+			'relocation_list_index' : values[15],
+			'num_relocation_entries' : values[16],
+			'uuid' : uuid.UUID(bytes=values[17])
+		}
+		return self.header
 
 	def close(self):
 		self.zip.close()
@@ -116,6 +173,8 @@ class Pebble(object):
 		"SYSTEM_MESSAGE": 18,
 		"MUSIC_CONTROL": 32,
 		"PHONE_CONTROL": 33,
+		"APPLICATION_MESSAGE": 48,
+		"LAUNCHER": 49,
 		"LOGS": 2000,
 		"PING": 2001,
 		"LOG_DUMP": 2002,
@@ -145,10 +204,11 @@ class Pebble(object):
 		log.info("Autodetect found a Pebble with ID %s" % id)
 		return id
 
-	def __init__(self, id = None):
-		if id is None:
+	def __init__(self, id = None, using_lightblue = True, pair_first = False):
+		if id is None and not using_lightblue:
 			id = Pebble.AutodetectDevice()
 		self.id = id
+		self.using_lightblue = using_lightblue
 		self._alive = True
 		self._endpoint_handlers = {}
 		self._internal_endpoint_handlers = {
@@ -157,24 +217,37 @@ class Pebble(object):
 			self.endpoints["PHONE_VERSION"]: self._phone_version_response,
 			self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
 			self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
+			self.endpoints["APPLICATION_MESSAGE"]: self._application_message_response,
+			self.endpoints["LAUNCHER"]: self._application_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
 		try:
-			devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
-			log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
-			self._ser = serial.Serial(devicefile, 115200, timeout=1)
-			log.debug("Connected")
+			if using_lightblue:
+				self._ser = LightBluePebble(self.id, pair_first)
+				signal.signal(signal.SIGINT, self._exit_signal_handler)
+			else:
+				devicefile = "/dev/tty.Pebble"+id+"-SerialPortSe"
+				log.debug("Attempting to open %s as Pebble device %s" % (devicefile, id))
+				self._ser = serial.Serial(devicefile, 115200, timeout=1)
 
 			log.debug("Initializing reader thread")
 			self._read_thread = threading.Thread(target=self._reader)
 			self._read_thread.setDaemon(True)
 			self._read_thread.start()
-			log.debug("Reader thread loaded")
-		except:
+			log.debug("Reader thread loaded on tid %s" % self._read_thread.name)
+		except PebbleError:
 			raise PebbleError(id, "Failed to connect to Pebble")
+		except:
+			raise
+
+	def _exit_signal_handler(self, signum, frame):
+		print "Disconnecting before exiting..."
+		self.disconnect()
+		time.sleep(1)
+		os._exit(0)
 
 	def __del__(self):
 		try:
@@ -218,13 +291,23 @@ class Pebble(object):
 		self._ser.write(msg)
 
 	def _recv_message(self):
-		data = self._ser.read(4)
-		if len(data) == 0:
-			return (None, None)
-		elif len(data) < 4:
-			raise PebbleError(self.id, "Malformed response with length "+str(len(data)))
-		size, endpoint = unpack("!HH", data)
-		resp = self._ser.read(size)
+		if self.using_lightblue:
+			try:
+				endpoint, resp, data = self._ser.read()
+				if resp is None:
+					return None, None
+			except TypeError:
+				# the lightblue process has likely shutdown and cannot be read from
+				self.alive = False
+				return None, None
+		else:
+			data = self._ser.read(4)
+			if len(data) == 0:
+				return (None, None)
+			elif len(data) < 4:
+				raise PebbleError(self.id, "Malformed response with length "+str(len(data)))
+			size, endpoint = unpack("!HH", data)
+			resp = self._ser.read(size)
 
 		if DEBUG_PROTOCOL:
 			log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
@@ -288,12 +371,31 @@ class Pebble(object):
 		if not async:
 			return EndpointSync(self, "APP_MANAGER").get_data()
 
-	def remove_app(self, appid, index):
+	def remove_app(self, appid, index, async=False):
 
 		"""Remove an installed application from the target app-bank."""
 
 		data = pack("!bII", 2, appid, index)
 		self._send_message("APP_MANAGER", data)
+
+		if not async:
+			return EndpointSync(self, "APP_MANAGER").get_data()
+
+	def remove_app_by_uuid(self, uuid_to_remove, uuid_is_string=True, async = False):
+
+		"""Remove an installed application by UUID."""
+
+		if uuid_is_string:
+			uuid_to_remove = uuid_to_remove.decode('hex')
+		elif type(uuid_to_remove) is uuid.UUID:
+			uuid_to_remove = uuid_to_remove.bytes
+		# else, assume it's a byte array
+
+		data = pack("b", 0x02) + str(uuid_to_remove)
+		self._send_message("APP_MANAGER", data)
+
+		if not async:
+			return EndpointSync(self, "APP_MANAGER").get_data()
 
 	def get_time(self, async = False):
 
@@ -311,20 +413,58 @@ class Pebble(object):
 		data = pack("!bL", 2, timestamp)
 		self._send_message("TIME", data)
 
-	def reinstall_app(self, name, pbz_path):
+
+	def reinstall_app(self, pbz_path, launch_on_install=True):
 
 		"""
-		A convenience method to uninstall and install an app.
+		A convenience method to uninstall and install an app
 
-		This will only work if the app hasn't changed names between the new and old versions.
+		If the UUID uninstallation method fails, app name in metadata will be used.
 		"""
+		def endpoint_check(result, pbz_path):
+			if result == 'app removed':
+				print result
+				return True
+			else:
+				if DEBUG_PROTOCOL:
+					log.warn("Failed to remove supplied app, app manager message was: " + result)
+				return False
+
+		# get the bundle's metadata to identify the app being replaced
+		bundle = PebbleBundle(pbz_path)
+		if not bundle.is_app_bundle():
+			raise PebbleError(self.id, "This is not an app bundle")
+		app_metadata = bundle.get_app_metadata()
+
+		# attempt to remove an app by its UUID
+		result_uuid = self.remove_app_by_uuid(app_metadata['uuid'].bytes, uuid_is_string=False)
+		if endpoint_check(result_uuid, pbz_path):
+			return self.install_app(pbz_path, launch_on_install)
+
+		if DEBUG_PROTOCOL:
+			log.warn("UUID removal failure, attempting to remove existing app by app name")
+
+		# attempt to remove an app by its name
 		apps = self.get_appbank_status()
 		for app in apps["apps"]:
-			if app["name"] == name:
-				self.remove_app(app["id"], app["index"])
+			if app["name"] == app_metadata['app_name']:
+				result_name = self.remove_app(app["id"], app["index"])
+				if endpoint_check(result_name, pbz_path):
+					return self.install_app(pbz_path, launch_on_install)
+
+		log.warn("Unable to locate previous instance of supplied application")
+
+	def reinstall_app_by_uuid(self, uuid, pbz_path):
+
+		"""
+		A convenience method to uninstall and install an app by UUID.
+
+		Must supply app UUID from source. ex: '54D3008F0E46462C995C0D0B4E01148C'
+		"""
+		self.remove_app_by_uuid(uuid)
 		self.install_app(pbz_path)
 
-	def install_app(self, pbz_path):
+	def install_app(self, pbz_path, launch_on_install=True):
 
 		"""
 		Install an app bundle (*.pbw) to the target Pebble.
@@ -335,12 +475,11 @@ class Pebble(object):
 		bundle = PebbleBundle(pbz_path)
 		if not bundle.is_app_bundle():
 			raise PebbleError(self.id, "This is not an app bundle")
+		app_metadata = bundle.get_app_metadata()
 
-		binary = bundle.zip.read(
-			bundle.get_application_info()['name'])
+		binary = bundle.zip.read(bundle.get_application_info()['name'])
 		if bundle.has_resources():
-			resources = bundle.zip.read(
-				bundle.get_resources_info()['name'])
+			resources = bundle.zip.read(bundle.get_resources_info()['name'])
 		else:
 			resources = None
 
@@ -378,6 +517,8 @@ class Pebble(object):
 		self._add_app(first_free)
 		time.sleep(2)
 
+		if launch_on_install:
+			self.launcher_message(app_metadata['uuid'].bytes, "RUNNING", uuid_is_string=False)
 
 	def install_firmware(self, pbz_path, recovery=False):
 
@@ -412,6 +553,38 @@ class Pebble(object):
 
 		self.system_message("FIRMWARE_COMPLETE")
 
+	def launcher_message(self, app_uuid, key_value, uuid_is_string = True, async = False):
+		""" send an appication message to launch or kill a specified application"""
+
+		launcher_keys = {
+			"RUN_STATE_KEY": b'\x00\x00\x00\x01'
+		}
+
+		launcher_key_values = {
+			"NOT_RUNNING": b'\x00',
+			"RUNNING": b'\x01'
+		}
+
+		if key_value not in launcher_key_values:
+			raise PebbleError(self.id, "not a valid application message")
+
+		if uuid_is_string:
+			app_uuid = app_uuid.decode('hex')
+		elif type(app_uuid) is uuid.UUID:
+			app_uuid = app_uuid.bytes
+		#else we can assume it's a byte array
+
+		amsg = AppMessage()
+
+		# build and send a single tuple-sized launcher command
+		app_message_tuple = amsg.build_tuple(launcher_keys["RUN_STATE_KEY"], "UINT", launcher_key_values[key_value])
+		app_message_dict = amsg.build_dict(app_message_tuple)
+		packed_message = amsg.build_message(app_message_dict, "PUSH", app_uuid)
+		self._send_message("LAUNCHER", packed_message)
+
+		# wait for either ACK or NACK response
+		if not async:
+			return EndpointSync(self, "LAUNCHER").get_data()
 
 	def system_message(self, command):
 
@@ -437,7 +610,7 @@ class Pebble(object):
 		log.debug("Sending command %s (code %d)" % (command, commands[command]))
 		self._send_message("SYSTEM_MESSAGE", data)
 
-	def ping(self, cookie = 0, async = False):
+	def ping(self, cookie = 0xDEC0DE, async = False):
 
 		"""Send a 'ping' to the watch to test connectivity."""
 
@@ -504,6 +677,12 @@ class Pebble(object):
 		apps = {}
 		restype, = unpack("!b", data[0])
 
+		app_install_message = {
+			0: "app available",
+			1: "app removed",
+			2: "app updated"
+		}
+
 		if restype == 1:
 			apps["banks"], apps_installed = unpack("!II", data[1:9])
 			apps["apps"] = []
@@ -520,6 +699,11 @@ class Pebble(object):
 				offset += appinfo_size
 
 			return apps
+
+		elif restype == 2:
+			message_id = unpack("!I", data[1:])
+			message_id = int(''.join(map(str, message_id)))
+			return app_install_message[message_id]
 
 	def _version_response(self, endpoint, data):
 		fw_names = {
@@ -551,6 +735,22 @@ class Pebble(object):
 		resp["btmac"] = ":".join([btmac_hex[i:i+2].upper() for i in reversed(xrange(0, 12, 2))])
 
 		return resp
+
+	def _application_message_response(self, endpoint, data):
+		app_messages = {
+			b'\x01': "PUSH",
+			b'\x02': "REQUEST",
+			b'\xFF': "ACK",
+			b'\x7F': "NACK"
+		}
+
+		if len(data) > 1:
+			rest = data[1:]
+		else:
+			rest = ''
+		if data[0] in app_messages:
+			return app_messages[data[0]] + rest
+
 
 	def _phone_version_response(self, endpoint, data):
 		session_cap = {
@@ -596,6 +796,63 @@ class Pebble(object):
 		}
 
 		return event_names[event] if event in event_names else None
+
+
+class AppMessage(object):
+# tools to build a valid app message
+	def build_tuple(self, key, data_type, data):
+		""" make a single app_message tuple"""
+		# available app message datatypes:
+		tuple_datatypes = {
+			"BYTE_ARRAY": b'\x00',
+			"CSTRIMG": b'\x01',
+			"UINT": b'\x02',
+			"INT": b'\x03'
+		}
+		# first build the message_tuple
+		app_message_tuple = OrderedDict([
+			("KEY", key),
+			("TYPE", tuple_datatypes[data_type]),
+			("LENGTH", pack('<H', len(data))),
+			("DATA", data)
+		])
+		# handle the little endians
+		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
+		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+		return app_message_tuple
+
+	def build_dict(self, tuple_of_tuples):
+		""" make a dictionary from a list of app_message tuples"""
+		# note that "TUPLE" can refer to 0 or more tuples. Tuples must be correct endian-ness already
+		tuple_count = len(tuple_of_tuples)
+		# make the bytearray from the flattened tuples
+		tuple_total_bytes = ''.join(item for item in itertools.chain(*tuple_of_tuples.values()))
+		# now build the dict
+		app_message_dict = OrderedDict([
+			("TUPLECOUNT", pack('B', tuple_count)),
+			("TUPLE", tuple_total_bytes)
+		])
+		return app_message_dict
+
+	def build_message(self, dict_of_tuples, command, uuid, transaction_id=b'\x00'):
+		""" build the app_message intended for app with matching uuid"""
+		# NOTE: uuid must be a byte array
+		# available app_message commands:
+		app_messages = {
+			"PUSH": b'\x01',
+			"REQUEST": b'\x02',
+			"ACK": b'\xFF',
+			"NACK": b'\x7F'
+		}
+		# finally build the entire message
+		app_message = OrderedDict([
+			("COMMAND", app_messages[command]),
+			("TRANSACTIONID", transaction_id),
+			("UUID", uuid),
+			("DICT", ''.join(dict_of_tuples.values()))
+		])
+		return ''.join(app_message.values())
+
 
 class PutBytesClient(object):
 	states = {
