@@ -76,7 +76,9 @@ class PebbleBundle(object):
 		if (self.header):
 			return self.header
 
-		app_bin = self.zip.open('pebble-app.bin').read()
+		app_manifest = self.get_manifest()['application']
+
+		app_bin = self.zip.open(app_manifest['name']).read()
 
 		header = app_bin[0:self.app_metadata_length_bytes]
 		values = self.app_metadata_struct.unpack(header)
