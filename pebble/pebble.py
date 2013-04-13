@@ -693,11 +693,17 @@ class Pebble(object):
 			offset = 9
 			for i in xrange(apps_installed):
 				app = {}
-				app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
-					unpack("!II32s32sIH", data[offset:offset+appinfo_size])
-				app["name"] = app["name"].replace("\x00", "")
-				app["company"] = app["company"].replace("\x00", "")
-				apps["apps"] += [app]
+				try:
+					app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
+						unpack("!II32s32sIH", data[offset:offset+appinfo_size])
+					app["name"] = app["name"].replace("\x00", "")
+					app["company"] = app["company"].replace("\x00", "")
+					apps["apps"] += [app]
+				except:
+					if offset+appinfo_size > len(data):
+						log.warn("Couldn't load bank %d; remaining data = %s" % (i,repr(data[offset:])))
+					else:
+						raise
 				offset += appinfo_size
 
 			return apps
