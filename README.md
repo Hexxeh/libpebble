@@ -4,14 +4,14 @@ Interact with your Pebble from OSX, Ubuntu or Debian operating systems.
 
 ## Warning and Complications
 
-* Supported OS's are `OSX 10.8`, `Ubuntu`, `Debian`
-* OS's which can utilize a faster Bluetooth library, Lightblue-0.4, are `OSX 10.8` and `Ubuntu`
-* Detailed Lightblue-0.4 installation instructions for earlier version of OSX (10.6) and other OS's can be found [here](http://lightblue.sourceforge.net/#downloads)
+* Supported OSes are `OSX 10.8`, `Ubuntu`, `Debian`
+* OSes which can utilize a faster Bluetooth library, Lightblue-0.4, are `OSX 10.8` and `Ubuntu`
+* Detailed Lightblue-0.4 installation instructions for earlier version of OSX (10.6) and other OSes can be found [here](http://lightblue.sourceforge.net/#downloads)
 
 
 ##1. Install Dependencies
 
-All supported OS's will require `python 2.7` to operate libpebble. It can be installed [here](http://www.python.org/download/releases/2.7/)
+All supported OSes will require `python 2.7` to operate libpebble. It can be installed [here](http://www.python.org/download/releases/2.7/)
 
 ###a. OSX Additional Dependencies
 
@@ -66,6 +66,10 @@ When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
       where `00:11:22:33:44:55:66` is the Pebble's MAC Address, viewable on the Pebble from `settings`-->`about`
 * You can obtain your pebble's MAC address after a successful connection in the libpebble stdout debug logs
 * The `--pebble_id` can also be the 4 letter friendly name of your pebble but this will require that the Pebble is broadcasting.
+* It is also possible to set the PEBBLE_ID environment variable as well:
+
+      export PEBBLE_ID="00:11:22:33:44:55:66"
+      ./p.py --lightblue get_time
 
 #####Using libpebble without --lightblue on OSX (MAY CAUSE KERNEL PANICS)
 
