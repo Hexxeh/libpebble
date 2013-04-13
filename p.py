@@ -199,7 +199,10 @@ def main():
         if attempts > MAX_ATTEMPTS:
             raise 'Could not connect to Pebble'
         try:
-            pebble = libpebble.Pebble(args.pebble_id, args.lightblue, args.pair)
+            pebble_id = args.pebble_id
+            if pebble_id is None and "PEBBLE_ID" in os.environ:
+                pebble_id = os.environ["PEBBLE_ID"]
+            pebble = libpebble.Pebble(pebble_id, args.lightblue, args.pair)
             break
         except:
             time.sleep(5)
