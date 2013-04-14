@@ -154,7 +154,14 @@ class LightBluePebble(object):
             if (rec_data is not None) and (len(rec_data) == 4):
                 # check the Stream Multiplexing Layer message and get the length of the data to read
                 size, endpoint = unpack("!HH", rec_data)
-                resp = self._bts.recv(size)
+                resp = ''
+                while len(resp) < size:
+                    try:
+                        resp += self._bts.recv(size-len(resp))
+                    except (socket.timeout, socket.error):
+                        # Exception raised from timing out on nonblocking
+                        # TODO: Should probably have some kind of timeout here
+                        pass
                 try:
                     self.rec_queue.put((endpoint, resp, rec_data))
                 except (IOError, EOFError):
