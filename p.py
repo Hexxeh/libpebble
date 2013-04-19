@@ -118,6 +118,13 @@ def cmd_get_time(pebble, args):
 def cmd_set_time(pebble, args):
     pebble.set_time(args.timestamp)
 
+def cmd_set_time_now(pebble, args):
+    pebble.set_time(time.time() - time.timezone + time.daylight*3600)
+
+def cmd_set_time_mdyhms(pebble, args):
+    t = time.strptime(args.mdyhms,"%m/%d/%Y %H:%M:%S")
+    pebble.set_time(time.mktime(t) - time.timezone)
+
 def main():
     parser = argparse.ArgumentParser(description='a utility belt for pebble development')
     parser.add_argument('--pebble_id', type=str, help='the last 4 digits of the target Pebble\'s MAC address. \nNOTE: if \
@@ -186,6 +193,13 @@ def main():
     set_time_parser = subparsers.add_parser('set_time', help='set the time stored on a connected watch')
     set_time_parser.add_argument('timestamp', type=int, help='time stamp to be sent')
     set_time_parser.set_defaults(func=cmd_set_time)
+
+    set_time_now_parser = subparsers.add_parser('set_time_now', help='set the time stored on a connected watch to the current time')
+    set_time_now_parser.set_defaults(func=cmd_set_time_now)
+
+    set_time_mdyhms_parser = subparsers.add_parser('set_time_mdyhms', help='set the time stored on a connected watch to the time in "mm/dd/yyyy hh:mm:ss"')
+    set_time_mdyhms_parser.add_argument('mdyhms', type=str, help='eg. "04/20/2020 10:45:00"')
+    set_time_mdyhms_parser.set_defaults(func=cmd_set_time_mdyhms)
 
     remote_parser = subparsers.add_parser('remote', help='control a music app on this PC using Pebble')
     remote_parser.add_argument('app_name', type=str, help='title of application to be controlled')
