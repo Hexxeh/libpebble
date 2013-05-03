@@ -127,4 +127,4 @@ A basic REPL is available, it is best used with ipython:
 
     `sudo ipython repl.py`
 
-The variable pebble refers the watch connection.  You can for example perform `pebble.get_time()` to get the time of the watch
+The variable `pebble` refers to the watch connection.  You can for example perform `pebble.get_time()` to get the time of the watch
