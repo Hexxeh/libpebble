@@ -61,7 +61,7 @@ When using libpebble on OSX, it is recommended that `--lightblue` be utilized.
 
 #####Using libpebble with --lightblue on OSX
 * First install the OSX dependencies, general dependencies and lightblue
-* From the `libpebble-dev` folder, execute the following: `./p.py --lightblue --pair get_time`
+* From the `libpebble` folder, execute the following: `./p.py --lightblue --pair get_time`
 * Note that if no `--pebble_id` is specified before the command, you are provided with a GUI selection tool.
 * Note that if a MAC address is supplied, initialization time is reduced. 
     * For example:  `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
@@ -85,7 +85,7 @@ _Automated pairing via `--pair` is not currently supported in Ubuntu_
 
 * First install the Ubuntu dependencies, general dependencies and lightblue
 * In Ubuntu's `Menu`-->`Settings`-->`Connectivity`-->`Bluetooth` dialog, pair with your Pebble
-* From the `libpebble-dev` folder, execute the following: `./p.py --lightblue get_time`
+* From the `libpebble` folder, execute the following: `./p.py --lightblue get_time`
 * Note that if no `--pebble_id` is specified before the command, you are provided with a GUI selection tool.
 * For example: `./p.py --pebble_id 00:11:22:33:44:55:66 --lightblue get_time`
 * The `--pebble_id` can also be the 4 letter friendly name of your pebble but this require that the Pebble is broadcasting.
