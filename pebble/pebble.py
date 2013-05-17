@@ -592,6 +592,56 @@ class Pebble(object):
 		if not async:
 			return EndpointSync(self, "LAUNCHER").get_data()
 
+	def app_message_send_tuple(self, app_uuid, key, tuple_datatype, tuple_data):
+
+		"""  Send a Dictionary with a single tuple to the app corresponding to UUID """
+
+		app_uuid = app_uuid.decode('hex')
+		amsg = AppMessage()
+
+		app_message_tuple = amsg.build_tuple(key, tuple_datatype, tuple_data)
+		app_message_dict = amsg.build_dict(app_message_tuple)
+		packed_message = amsg.build_message(app_message_dict, "PUSH", app_uuid)
+		self._send_message("APPLICATION_MESSAGE", packed_message)
+
+	def app_message_send_string(self, app_uuid, key, string):
+
+		"""  Send a Dictionary with a single tuple of type CSTRING to the app corresponding to UUID """
+
+		# NULL terminate and pack
+		string = string + '\0'
+		fmt =  '<' + str(len(string)) + 's'
+		string = pack(fmt, string);
+
+		self.app_message_send_tuple(app_uuid, key, "CSTRING", string)
+
+	def app_message_send_uint(self, app_uuid, key, tuple_uint):
+
+		"""  Send a Dictionary with a single tuple of type UINT to the app corresponding to UUID """
+
+		fmt = '<' + str(tuple_uint.bit_length() / 8 + 1) + 'B'
+		tuple_uint = pack(fmt, tuple_uint)
+
+		self.app_message_send_tuple(app_uuid, key, "UINT", tuple_uint)
+
+	def app_message_send_int(self, app_uuid, key, tuple_int):
+
+		"""  Send a Dictionary with a single tuple of type INT to the app corresponding to UUID """
+
+		fmt = '<' + str(tuple_int.bit_length() / 8 + 1) + 'b'
+		tuple_int = pack(fmt, tuple_int)
+
+		self.app_message_send_tuple(app_uuid, key, "INT", tuple_int)
+
+	def app_message_send_byte_array(self, app_uuid, key, tuple_byte_array):
+
+		"""  Send a Dictionary with a single tuple of type BYTE_ARRAY to the app corresponding to UUID """
+
+		# Already packed, fix endianness
+		tuple_byte_array = tuple_byte_array[::-1]
+
+		self.app_message_send_tuple(app_uuid, key, "BYTE_ARRAY", tuple_byte_array)
+
 	def system_message(self, command):
 
 		"""
@@ -811,20 +861,19 @@ class AppMessage(object):
 		# available app message datatypes:
 		tuple_datatypes = {
 			"BYTE_ARRAY": b'\x00',
-			"CSTRIMG": b'\x01',
+			"CSTRING": b'\x01',
 			"UINT": b'\x02',
 			"INT": b'\x03'
 		}
-		# first build the message_tuple
+
+		# build the message_tuple
 		app_message_tuple = OrderedDict([
-			("KEY", key),
+			("KEY", pack('<L', key)),
 			("TYPE", tuple_datatypes[data_type]),
 			("LENGTH", pack('<H', len(data))),
 			("DATA", data)
 		])
-		# handle the little endians
-		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
-		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+
 		return app_message_tuple
 
 	def build_dict(self, tuple_of_tuples):
