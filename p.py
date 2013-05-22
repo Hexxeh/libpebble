@@ -24,6 +24,18 @@ def cmd_load_fw(pebble, args):
 def cmd_launch_app(pebble, args):
     pebble.launcher_message(args.app_uuid, "RUNNING")
 
+def cmd_app_msg_send_string(pebble, args):
+		pebble.app_message_send_string(args.app_uuid, args.key, args.tuple_string)
+
+def cmd_app_msg_send_uint(pebble, args):
+		pebble.app_message_send_uint(args.app_uuid, args.key, args.tuple_uint)
+
+def cmd_app_msg_send_int(pebble, args):
+		pebble.app_message_send_int(args.app_uuid, args.key, args.tuple_int)
+
+def cmd_app_msg_send_bytes(pebble, args):
+		pebble.app_message_send_byte_array(args.app_uuid, args.key, args.tuple_bytes)
+
 def cmd_remote(pebble, args):
     def do_oscacript(command):
         cmd = "osascript -e 'tell application \""+args.app_name+"\" to "+command+"'"
@@ -135,6 +147,30 @@ def main():
     launch_parser = subparsers.add_parser('launch_app', help='launch an app on the watch by its UUID')
     launch_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
     launch_parser.set_defaults(func=cmd_launch_app)
+
+    msg_send_string_parser = subparsers.add_parser('msg_send_string', help='sends a string via app message')
+    msg_send_string_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
+    msg_send_string_parser.add_argument('key', type=int, help='a valid tuple key for the app')
+    msg_send_string_parser.add_argument('tuple_string', type=str, help='a string to send along')
+    msg_send_string_parser.set_defaults(func=cmd_app_msg_send_string)
+
+    msg_send_int_parser = subparsers.add_parser('msg_send_int', help='sends an int via app message')
+    msg_send_int_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
+    msg_send_int_parser.add_argument('key', type=int, help='a valid tuple key for the app')
+    msg_send_int_parser.add_argument('tuple_int', type=int, help='an int to send along')
+    msg_send_int_parser.set_defaults(func=cmd_app_msg_send_int)
+
+    msg_send_uint_parser = subparsers.add_parser('msg_send_uint', help='sends a uint via app message')
+    msg_send_uint_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
+    msg_send_uint_parser.add_argument('key', type=int, help='a valid tuple key for the app')
+    msg_send_uint_parser.add_argument('tuple_uint', type=int, help='a uint to send along')
+    msg_send_uint_parser.set_defaults(func=cmd_app_msg_send_uint)
+
+    msg_send_bytes_parser = subparsers.add_parser('msg_send_bytes', help='sends a byte array via app message')
+    msg_send_bytes_parser.add_argument('app_uuid', metavar='UUID', type=str, help='a valid UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C')
+    msg_send_bytes_parser.add_argument('key', type=int, help='a valid tuple key for the app')
+    msg_send_bytes_parser.add_argument('tuple_bytes', type=str, help='a byte array to send along')
+    msg_send_bytes_parser.set_defaults(func=cmd_app_msg_send_bytes)
 
     load_parser = subparsers.add_parser('load', help='load an app onto a connected watch')
     load_parser.add_argument('--nolaunch', action="store_false", help='do not launch the application after install')
