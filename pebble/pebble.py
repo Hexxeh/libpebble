@@ -559,7 +559,7 @@ class Pebble(object):
 		""" send an appication message to launch or kill a specified application"""
 
 		launcher_keys = {
-			"RUN_STATE_KEY": b'\x00\x00\x00\x01'
+			"RUN_STATE_KEY": 1,
 		}
 
 		launcher_key_values = {
