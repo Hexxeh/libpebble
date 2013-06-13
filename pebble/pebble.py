@@ -180,6 +180,7 @@ class Pebble(object):
 		"LOG_DUMP": 2002,
 		"RESET": 2003,
 		"APP": 2004,
+		"APP_LOGS": 2006,
 		"NOTIFICATION": 3000,
 		"RESOURCE": 4000,
 		"APP_MANAGER": 6000,
@@ -221,6 +222,7 @@ class Pebble(object):
 			self.endpoints["LAUNCHER"]: self._application_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
+			self.endpoints["APP_LOGS"]: self._app_log_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
@@ -712,7 +714,7 @@ class Pebble(object):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
 			return;
 
-		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data[:8])
+		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[:8])
 		filename = data[8:24].decode('utf-8')
 		message = data[24:24+msgsize].decode('utf-8')
 
@@ -725,9 +727,32 @@ class Pebble(object):
 			250: "V"
 		}
 
-		level = log_levels[level] if level in log_levels else "?"
+		str_level = log_levels[level] if level in log_levels else "?"
 
-		print timestamp, level, filename, linenumber, message
+		print timestamp, str_level, filename, linenumber, message
+
+	def _app_log_response(self, endpoint, data):
+		if (len(data) < 8):
+			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
+			return;
+
+                app_uuid = uuid.UUID(bytes=data[0:16])
+		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[16:24])
+		filename = data[24:40].decode('utf-8')
+                message = data[40:40+msgsize].decode('utf-8')
+
+		log_levels = {
+			0: "*",
+			1: "E",
+			50: "W",
+			100: "I",
+			200: "D",
+			250: "V"
+		}
+
+		str_level = log_levels[level] if level in log_levels else "?"
+
+		print timestamp, str_level, app_uuid, filename, linenumber, message
 
 	def _appbank_status_response(self, endpoint, data):
 		apps = {}
