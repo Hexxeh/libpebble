@@ -27,6 +27,7 @@ log.setLevel(logging.DEBUG)
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 DEBUG_PROTOCOL = False	
 
+
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
 
@@ -186,6 +187,16 @@ class Pebble(object):
 		"APP_MANAGER": 6000,
 		"PUTBYTES": 48879
 	}
+
+	log_levels = {
+		0: "*",
+		1: "E",
+		50: "W",
+		100: "I",
+		200: "D",
+		250: "V"
+	}
+
 
 	@staticmethod
 	def AutodetectDevice():
@@ -712,20 +723,11 @@ class Pebble(object):
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
-			return;
+			return
 
 		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[:8])
 		filename = data[8:24].decode('utf-8')
 		message = data[24:24+msgsize].decode('utf-8')
-
-		log_levels = {
-			0: "*",
-			1: "E",
-			50: "W",
-			100: "I",
-			200: "D",
-			250: "V"
-		}
 
 		str_level = log_levels[level] if level in log_levels else "?"
 
@@ -734,21 +736,12 @@ class Pebble(object):
 	def _app_log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
-			return;
+			return
 
-                app_uuid = uuid.UUID(bytes=data[0:16])
+		app_uuid = uuid.UUID(bytes=data[0:16])
 		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[16:24])
 		filename = data[24:40].decode('utf-8')
-                message = data[40:40+msgsize].decode('utf-8')
-
-		log_levels = {
-			0: "*",
-			1: "E",
-			50: "W",
-			100: "I",
-			200: "D",
-			250: "V"
-		}
+		message = data[40:40+msgsize].decode('utf-8')
 
 		str_level = log_levels[level] if level in log_levels else "?"
 
