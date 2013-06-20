@@ -50,7 +50,6 @@ Support for lightblue is untested in Debian, however the following should be ins
 * To install lightblue clone `lightblue-0.4` from `https://github.com/pebble/lightblue-0.4` and then:
     * `cd lightblue-0.4`
     * `sudo python setup.py install`
-* _NOTE_ in OSX 10.8.3, you should instead clone `lightblue-0.4` from `https://github.com/pipt/lightblue-0.4` which contains some fixes. The installation steps are the same as with `pebble/libpebble.git` 
 
 
 ##3. Testing the Connection
