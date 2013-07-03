@@ -729,7 +729,7 @@ class Pebble(object):
 		filename = data[8:24].decode('utf-8')
 		message = data[24:24+msgsize].decode('utf-8')
 
-		str_level = log_levels[level] if level in log_levels else "?"
+		str_level = self.log_levels[level] if level in self.log_levels else "?"
 
 		print timestamp, str_level, filename, linenumber, message
 
@@ -743,7 +743,7 @@ class Pebble(object):
 		filename = data[24:40].decode('utf-8')
 		message = data[40:40+msgsize].decode('utf-8')
 
-		str_level = log_levels[level] if level in log_levels else "?"
+		str_level = self.log_levels[level] if level in self.log_levels else "?"
 
 		print timestamp, str_level, app_uuid, filename, linenumber, message
 
