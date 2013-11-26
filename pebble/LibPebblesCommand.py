@@ -10,6 +10,7 @@ from PblCommand import PblCommand
 import PblAnalytics
 
 PEBBLE_PHONE_ENVVAR='PEBBLE_PHONE'
+PEBBLE_ID_ENVVAR='PEBBLE_ID'
 
 class ConfigurationException(Exception):
     pass
@@ -33,14 +34,21 @@ class LibPebbleCommand(PblCommand):
         PblCommand.configure_subparser(self, parser)
         parser.add_argument('--phone', type=str, default=os.getenv(PEBBLE_PHONE_ENVVAR),
                 help='The IP address or hostname of your phone - Can also be provided through PEBBLE_PHONE environment variable.')
+        parser.add_argument('--pebble_id', type=str, default=os.getenv(PEBBLE_ID_ENVVAR),
+                help='Last 4 digits of the MAC address of your Pebble - Can also be provided through PEBBLE_ID environment variable.')
         parser.add_argument('--verbose', type=bool, default=False, help='Prints received system logs in addition to APP_LOG')
 
     def run(self, args):
-        if not args.phone:
-            raise ConfigurationException("Argument --phone is required (Or set a PEBBLE_PHONE environment variable)")
+        if not args.phone and not args.pebble_id:
+            raise ConfigurationException("Argument --phone or --pebble_id is required (Or set a PEBBLE_{PHONE,ID} environment variable)")
         self.pebble = libpebble.Pebble()
         self.pebble.set_print_pbl_logs(args.verbose)
-        self.pebble.connect_via_websocket(args.phone)
+
+        if args.phone:
+            self.pebble.connect_via_websocket(args.phone)
+
+        if args.pebble_id:
+            self.pebble.connect_via_serial(args.pebble_id)
 
     def tail(self, interactive=False, skip_enable_app_log=False):
         if not skip_enable_app_log:

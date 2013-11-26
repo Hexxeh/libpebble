@@ -428,7 +428,7 @@ class Pebble(object):
             log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
             log.debug('<<< ' + (data + resp).encode('hex'))
 
-        return (source, endpoint, resp)
+        return ("serial", endpoint, resp)
 
     def register_endpoint(self, endpoint_name, func):
         if endpoint_name not in self.endpoints:
