@@ -27,6 +27,7 @@ log.setLevel(logging.DEBUG)
 DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
 DEBUG_PROTOCOL = False	
 
+
 class PebbleBundle(object):
 	MANIFEST_FILENAME = 'manifest.json'
 
@@ -76,7 +77,9 @@ class PebbleBundle(object):
 		if (self.header):
 			return self.header
 
-		app_bin = self.zip.open('pebble-app.bin').read()
+		app_manifest = self.get_manifest()['application']
+
+		app_bin = self.zip.open(app_manifest['name']).read()
 
 		header = app_bin[0:self.app_metadata_length_bytes]
 		values = self.app_metadata_struct.unpack(header)
@@ -180,11 +183,22 @@ class Pebble(object):
 		"LOG_DUMP": 2002,
 		"RESET": 2003,
 		"APP": 2004,
+		"APP_LOGS": 2006,
 		"NOTIFICATION": 3000,
 		"RESOURCE": 4000,
 		"APP_MANAGER": 6000,
 		"PUTBYTES": 48879
 	}
+
+	log_levels = {
+		0: "*",
+		1: "E",
+		50: "W",
+		100: "I",
+		200: "D",
+		250: "V"
+	}
+
 
 	@staticmethod
 	def AutodetectDevice():
@@ -221,6 +235,7 @@ class Pebble(object):
 			self.endpoints["LAUNCHER"]: self._application_message_response,
 			self.endpoints["LOGS"]: self._log_response,
 			self.endpoints["PING"]: self._ping_response,
+			self.endpoints["APP_LOGS"]: self._app_log_response,
 			self.endpoints["APP_MANAGER"]: self._appbank_status_response
 		}
 
@@ -557,7 +572,7 @@ class Pebble(object):
 		""" send an appication message to launch or kill a specified application"""
 
 		launcher_keys = {
-			"RUN_STATE_KEY": b'\x00\x00\x00\x01'
+			"RUN_STATE_KEY": 1,
 		}
 
 		launcher_key_values = {
@@ -585,6 +600,56 @@ class Pebble(object):
 		# wait for either ACK or NACK response
 		if not async:
 			return EndpointSync(self, "LAUNCHER").get_data()
+
+	def app_message_send_tuple(self, app_uuid, key, tuple_datatype, tuple_data):
+
+		"""  Send a Dictionary with a single tuple to the app corresponding to UUID """
+
+		app_uuid = app_uuid.decode('hex')
+		amsg = AppMessage()
+
+		app_message_tuple = amsg.build_tuple(key, tuple_datatype, tuple_data)
+		app_message_dict = amsg.build_dict(app_message_tuple)
+		packed_message = amsg.build_message(app_message_dict, "PUSH", app_uuid)
+		self._send_message("APPLICATION_MESSAGE", packed_message)
+
+	def app_message_send_string(self, app_uuid, key, string):
+
+		"""  Send a Dictionary with a single tuple of type CSTRING to the app corresponding to UUID """
+
+		# NULL terminate and pack
+		string = string + '\0'
+		fmt =  '<' + str(len(string)) + 's'
+		string = pack(fmt, string);
+
+		self.app_message_send_tuple(app_uuid, key, "CSTRING", string)
+
+	def app_message_send_uint(self, app_uuid, key, tuple_uint):
+
+		"""  Send a Dictionary with a single tuple of type UINT to the app corresponding to UUID """
+
+		fmt = '<' + str(tuple_uint.bit_length() / 8 + 1) + 'B'
+		tuple_uint = pack(fmt, tuple_uint)
+
+		self.app_message_send_tuple(app_uuid, key, "UINT", tuple_uint)
+
+	def app_message_send_int(self, app_uuid, key, tuple_int):
+
+		"""  Send a Dictionary with a single tuple of type INT to the app corresponding to UUID """
+
+		fmt = '<' + str(tuple_int.bit_length() / 8 + 1) + 'b'
+		tuple_int = pack(fmt, tuple_int)
+
+		self.app_message_send_tuple(app_uuid, key, "INT", tuple_int)
+
+	def app_message_send_byte_array(self, app_uuid, key, tuple_byte_array):
+
+		"""  Send a Dictionary with a single tuple of type BYTE_ARRAY to the app corresponding to UUID """
+
+		# Already packed, fix endianness
+		tuple_byte_array = tuple_byte_array[::-1]
+
+		self.app_message_send_tuple(app_uuid, key, "BYTE_ARRAY", tuple_byte_array)
 
 	def system_message(self, command):
 
@@ -654,24 +719,29 @@ class Pebble(object):
 	def _log_response(self, endpoint, data):
 		if (len(data) < 8):
 			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
-			return;
+			return
 
-		timestamp, level, msgsize, linenumber = unpack("!Ibbh", data[:8])
+		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[:8])
 		filename = data[8:24].decode('utf-8')
 		message = data[24:24+msgsize].decode('utf-8')
 
-		log_levels = {
-			0: "*",
-			1: "E",
-			50: "W",
-			100: "I",
-			200: "D",
-			250: "V"
-		}
+		str_level = self.log_levels[level] if level in self.log_levels else "?"
 
-		level = log_levels[level] if level in log_levels else "?"
+		print timestamp, str_level, filename, linenumber, message
 
-		print timestamp, level, filename, linenumber, message
+	def _app_log_response(self, endpoint, data):
+		if (len(data) < 8):
+			log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
+			return
+
+		app_uuid = uuid.UUID(bytes=data[0:16])
+		timestamp, level, msgsize, linenumber = unpack("!IBBH", data[16:24])
+		filename = data[24:40].decode('utf-8')
+		message = data[40:40+msgsize].decode('utf-8')
+
+		str_level = self.log_levels[level] if level in self.log_levels else "?"
+
+		print timestamp, str_level, app_uuid, filename, linenumber, message
 
 	def _appbank_status_response(self, endpoint, data):
 		apps = {}
@@ -691,11 +761,17 @@ class Pebble(object):
 			offset = 9
 			for i in xrange(apps_installed):
 				app = {}
-				app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
-					unpack("!II32s32sIH", data[offset:offset+appinfo_size])
-				app["name"] = app["name"].replace("\x00", "")
-				app["company"] = app["company"].replace("\x00", "")
-				apps["apps"] += [app]
+				try:
+					app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
+						unpack("!II32s32sIH", data[offset:offset+appinfo_size])
+					app["name"] = app["name"].replace("\x00", "")
+					app["company"] = app["company"].replace("\x00", "")
+					apps["apps"] += [app]
+				except:
+					if offset+appinfo_size > len(data):
+						log.warn("Couldn't load bank %d; remaining data = %s" % (i,repr(data[offset:])))
+					else:
+						raise
 				offset += appinfo_size
 
 			return apps
@@ -805,20 +881,19 @@ class AppMessage(object):
 		# available app message datatypes:
 		tuple_datatypes = {
 			"BYTE_ARRAY": b'\x00',
-			"CSTRIMG": b'\x01',
+			"CSTRING": b'\x01',
 			"UINT": b'\x02',
 			"INT": b'\x03'
 		}
-		# first build the message_tuple
+
+		# build the message_tuple
 		app_message_tuple = OrderedDict([
-			("KEY", key),
+			("KEY", pack('<L', key)),
 			("TYPE", tuple_datatypes[data_type]),
 			("LENGTH", pack('<H', len(data))),
 			("DATA", data)
 		])
-		# handle the little endians
-		app_message_tuple["KEY"] = app_message_tuple["KEY"][::-1]
-		app_message_tuple["DATA"] = app_message_tuple["DATA"][::-1]
+
 		return app_message_tuple
 
 	def build_dict(self, tuple_of_tuples):
