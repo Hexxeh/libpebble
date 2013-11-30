@@ -926,10 +926,10 @@ class Pebble(object):
         return timestamp
 
     def _system_message_response(self, endpoint, data):
-        if len(data) == 2:
-            log.info("Got system message %s" % repr(unpack('!bb', data)))
+        if len(data) >= 2:
+            log.info("Got system message %s" % repr(unpack('!bb', data[:2])))
         else:
-            log.info("Got 'unknown' system message...")
+            log.info("Got 'unknown' system message: " + binascii.hexlify(data))
 
     def _parse_log_response(self, log_message_data):
         timestamp, level, msgsize, linenumber = unpack("!IBBH", log_message_data[:8])
