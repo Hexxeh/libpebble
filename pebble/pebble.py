@@ -810,6 +810,34 @@ class Pebble(object):
         if not async:
             return EndpointSync(self, "PING").get_data()
 
+    phone_control_commands = {
+        "ANSWER" : 1,
+        "HANGUP" : 2,
+        "GET_STATE" : 3,
+        "INCOMING_CALL" : 4,
+        "OUTGOING_CALL" : 5,
+        "MISSED_CALL" : 6,
+        "RING" : 7,
+        "START" : 8,
+        "END" : 9,
+    }
+
+    def phone_call_start(self, number, name, incoming = True, cookie = 0):
+
+        """Send a 'phone_control' notification for incoming call."""
+
+        fmt = "!bL" + str(1+len(number)) + "p" + str(1+len(name)) + "p"
+        event = "INCOMING_CALL" if incoming else "OUTGOING_CALL"
+        data = pack(fmt, self.phone_control_commands[event], cookie, number, name)
+        self._send_message("PHONE_CONTROL", data)
+
+    def phone_event(self, event, cookie = 0):
+
+        """Send a 'phone_control' notification of start."""
+
+        data = pack("!bL", self.phone_control_commands[event], cookie)
+        self._send_message("PHONE_CONTROL", data)
+
     def reset(self):
 
         """Reset the watch remotely."""
