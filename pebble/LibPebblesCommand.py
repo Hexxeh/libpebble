@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import sh
+import subprocess
 import time
 
 import pebble as libpebble
@@ -94,6 +95,7 @@ class PblInstallCommand(LibPebbleCommand):
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
         parser.add_argument('pbw_path', type=str, nargs='?', default=self.get_pbw_path(), help='Path to the pbw to install (ie: build/*.pbw)')
+        parser.add_argument('--launch', action='store_true', help='Launch on install (only works over Bluetooth connection)')
         parser.add_argument('--logs', action='store_true', help='Display logs after installing the app')
 
     def run(self, args):
@@ -105,7 +107,7 @@ class PblInstallCommand(LibPebbleCommand):
 
         self.pebble.app_log_enable()
 
-        success = self.pebble.install_app_ws(args.pbw_path)
+        success = self.pebble.install_app(args.pbw_path, args.launch)
 
         # Send the phone OS version to analytics
         phoneInfoStr = self.pebble.get_phone_info()
@@ -113,6 +115,26 @@ class PblInstallCommand(LibPebbleCommand):
 
         if success and args.logs:
             self.tail(skip_enable_app_log=True)
+
+class PblInstallFWCommand(LibPebbleCommand):
+    name = 'install_fw'
+    help = 'Install a Pebble firmware'
+
+    def configure_subparser(self, parser):
+        LibPebbleCommand.configure_subparser(self, parser)
+        parser.add_argument('pbz_path', type=str, help='Path to the pbz to install')
+
+    def run(self, args):
+        LibPebbleCommand.run(self, args)
+
+        if not os.path.exists(args.pbz_path):
+            logging.error("Could not find pbz <{}> for install.".format(args.pbz_path))
+            return 1
+
+        self.pebble.install_firmware(args.pbz_path)
+        time.sleep(5)
+        logging.info('Resetting to apply firmware update...')
+        self.pebble.reset()
 
 class PblListCommand(LibPebbleCommand):
     name = 'list'
@@ -134,6 +156,57 @@ class PblListCommand(LibPebbleCommand):
         except:
             logging.error("Error getting apps list.")
             return 1
+
+class PblRemoteCommand(LibPebbleCommand):
+    name = 'remote'
+    help = 'Use Pebble\'s music app as a remote control for a local application'
+
+    def configure_subparser(self, parser):
+        LibPebbleCommand.configure_subparser(self, parser)
+        parser.add_argument('app_name', type=str, help='Local application name to control')
+
+    def do_oscacript(self, command):
+        cmd = "osascript -e 'tell application \""+self.args.app_name+"\" to "+command+"'"
+        try:
+            return subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError:
+            print "Failed to send message to "+self.args.app_name+", is it running?"
+            return False
+
+    def music_control_handler(self, endpoint, resp):
+        control_events = {
+            "PLAYPAUSE": "playpause",
+            "PREVIOUS": "previous track",
+            "NEXT": "next track"
+        }
+        if resp in control_events:
+            self.do_oscacript(control_events[resp])
+        elif resp == 'GET_NOW_PLAYING':
+            self.update_metadata()
+
+    def update_metadata(self):
+        artist = self.do_oscacript("artist of current track as string")
+        title = self.do_oscacript("name of current track as string")
+        album = self.do_oscacript("album of current track as string")
+
+        if not artist or not title or not album:
+            self.pebble.set_nowplaying_metadata("No Music Found", "", "")
+        else:
+            self.pebble.set_nowplaying_metadata(title, album, artist)
+
+    def run(self, args):
+        LibPebbleCommand.run(self, args)
+        self.args = args
+
+        self.pebble.register_endpoint("MUSIC_CONTROL", self.music_control_handler)
+
+        logging.info('Waiting for music control events...')
+        try:
+            while True:
+                self.update_metadata()
+                time.sleep(5)
+        except KeyboardInterrupt:
+            return
 
 class PblRemoveCommand(LibPebbleCommand):
     name = 'rm'
@@ -224,7 +297,6 @@ class PblScreenshotCommand(LibPebbleCommand):
                          "manually if you want to see what it looks like ("
                          "it has still been saved, however).")
 
-
 class PblLogsCommand(LibPebbleCommand):
     name = 'logs'
     help = 'Continuously displays logs from the watch'
@@ -235,6 +307,18 @@ class PblLogsCommand(LibPebbleCommand):
     def run(self, args):
         LibPebbleCommand.run(self, args)
         self.tail()
+
+class PblLaunchApp(LibPebbleCommand):
+    name = 'launch'
+    help = 'Launch an application.'
+
+    def configure_subparser(self, parser):
+        LibPebbleCommand.configure_subparser(self, parser)
+        parser.add_argument('app_uuid', type=int, help="a valid app UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C")
+
+    def run(self, args):
+        LibPebbleCommand.run(self, args)
+        self.pebble.launcher_message(args.app_uuid, "RUNNING")
 
 class PblReplCommand(LibPebbleCommand):
     name = 'repl'

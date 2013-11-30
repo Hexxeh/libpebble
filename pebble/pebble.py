@@ -375,6 +375,9 @@ class Pebble(object):
                     continue
 
                 #log.info("message for endpoint " + str(endpoint) + " resp : " + str(resp))
+                if DEBUG_PROTOCOL:
+                    log.debug('<< ' + binascii.hexlify(resp))
+
                 if endpoint in self._internal_endpoint_handlers:
                     resp = self._internal_endpoint_handlers[endpoint](endpoint, resp)
 
@@ -402,7 +405,7 @@ class Pebble(object):
         msg = self._build_message(self.endpoints[endpoint], data)
 
         if DEBUG_PROTOCOL:
-            log.debug('>>> ' + msg.encode('hex'))
+            log.debug('>> ' + binascii.hexlify(msg))
 
         self._ser.write(msg)
 
@@ -579,6 +582,9 @@ class Pebble(object):
 
 
     def get_phone_info(self):
+        if self._connection_type != 'ws':
+            return 'Unknown'
+
         self._ws_client = WSClient()
         # The first byte is reserved for future use as a protocol version ID
         #  and must be 0 for now. 
@@ -1140,8 +1146,14 @@ class Pebble(object):
 
         event_names = {
                 1: "PLAYPAUSE",
+                2: "PAUSE",
+                3: "PLAY",
                 4: "NEXT",
                 5: "PREVIOUS",
+                6: "VOLUME_UP",
+                7: "VOLUME_DOWN",
+                8: "GET_NOW_PLAYING",
+                9: "SEND_NOW_PLAYING",
         }
 
         return event_names[event] if event in event_names else None

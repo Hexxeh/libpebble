@@ -30,14 +30,17 @@ class PbSDKShell:
         self.commands.append(PblBuildCommand())
         self.commands.append(PblCleanCommand())
         self.commands.append(PblInstallCommand())
+        self.commands.append(PblInstallFWCommand())
         self.commands.append(PblPingCommand())
         self.commands.append(PblListCommand())
+        self.commands.append(PblRemoteCommand())
         self.commands.append(PblRemoveCommand())
         self.commands.append(PblCurrentAppCommand())
         self.commands.append(PblListUuidCommand())
         self.commands.append(PblLogsCommand())
         self.commands.append(PblReplCommand())
         self.commands.append(PblScreenshotCommand())
+        self.commands.append(PblLaunchApp())
 
     def _get_version(self):
         try:
