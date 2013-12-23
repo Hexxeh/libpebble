@@ -7,46 +7,47 @@ import itertools
 import json
 import logging as log
 import os
-import sh
 import signal
-import stm32_crc
 import struct
 import threading
 import time
-import traceback
 import re
 import uuid
 import zipfile
-import WebSocketPebble
-
 from collections import OrderedDict
 from struct import pack, unpack
+
+import sh
+import stm32_crc
+import WebSocketPebble
 from PIL import Image
 
-DEFAULT_PEBBLE_ID = None #Triggers autodetection on unix-like systems
+
+DEFAULT_PEBBLE_ID = None  # Triggers autodetection on unix-like systems
 DEFAULT_WEBSOCKET_PORT = 9000
 DEBUG_PROTOCOL = False
 APP_ELF_PATH = 'build/pebble-app.elf'
+
 
 class PebbleBundle(object):
     MANIFEST_FILENAME = 'manifest.json'
 
     STRUCT_DEFINITION = [
-            '8s',   # header
-            '2B',   # struct version
-            '2B',   # sdk version
-            '2B',   # app version
-            'H',    # size
-            'I',    # offset
-            'I',    # crc
-            '32s',  # app name
-            '32s',  # company name
-            'I',    # icon resource id
-            'I',    # symbol table address
-            'I',    # flags
-            'I',    # relocation list start
-            'I',    # num relocation list entries
-            '16s'   # uuid
+        '8s',  # header
+        '2B',  # struct version
+        '2B',  # sdk version
+        '2B',  # app version
+        'H',  # size
+        'I',  # offset
+        'I',  # crc
+        '32s',  # app name
+        '32s',  # company name
+        'I',  # icon resource id
+        'I',  # symbol table address
+        'I',  # flags
+        'I',  # relocation list start
+        'I',  # num relocation list entries
+        '16s'  # uuid
     ]
 
     def __init__(self, bundle_path):
@@ -65,7 +66,7 @@ class PebbleBundle(object):
         self.print_pbl_logs = False
 
     def get_manifest(self):
-        if (self.manifest):
+        if self.manifest:
             return self.manifest
 
         if self.MANIFEST_FILENAME not in self.zip.namelist():
@@ -76,7 +77,7 @@ class PebbleBundle(object):
 
     def get_app_metadata(self):
 
-        if (self.header):
+        if self.header:
             return self.header
 
         app_manifest = self.get_manifest()['application']
@@ -86,24 +87,24 @@ class PebbleBundle(object):
         header = app_bin[0:self.app_metadata_length_bytes]
         values = self.app_metadata_struct.unpack(header)
         self.header = {
-                'sentinel' : values[0],
-                'struct_version_major' : values[1],
-                'struct_version_minor' : values[2],
-                'sdk_version_major' : values[3],
-                'sdk_version_minor' : values[4],
-                'app_version_major' : values[5],
-                'app_version_minor' : values[6],
-                'app_size' : values[7],
-                'offset' : values[8],
-                'crc' : values[9],
-                'app_name' : values[10].rstrip('\0'),
-                'company_name' : values[11].rstrip('\0'),
-                'icon_resource_id' : values[12],
-                'symbol_table_addr' : values[13],
-                'flags' : values[14],
-                'relocation_list_index' : values[15],
-                'num_relocation_entries' : values[16],
-                'uuid' : uuid.UUID(bytes=values[17])
+            'sentinel': values[0],
+            'struct_version_major': values[1],
+            'struct_version_minor': values[2],
+            'sdk_version_major': values[3],
+            'sdk_version_minor': values[4],
+            'app_version_major': values[5],
+            'app_version_minor': values[6],
+            'app_size': values[7],
+            'offset': values[8],
+            'crc': values[9],
+            'app_name': values[10].rstrip('\0'),
+            'company_name': values[11].rstrip('\0'),
+            'icon_resource_id': values[12],
+            'symbol_table_addr': values[13],
+            'flags': values[14],
+            'relocation_list_index': values[15],
+            'num_relocation_entries': values[16],
+            'uuid': uuid.UUID(bytes=values[17])
         }
         return self.header
 
@@ -140,6 +141,7 @@ class PebbleBundle(object):
 
         return self.get_manifest()['resources']
 
+
 class ScreenshotSync():
     timeout = 60
     SCREENSHOT_OK = 0
@@ -162,7 +164,7 @@ class ScreenshotSync():
 
         self.data += data
         self.length_received += len(data) * 8 # in bits
-        self.progress_callback(float(self.length_received)/self.total_length)
+        self.progress_callback(float(self.length_received) / self.total_length)
         if self.length_received >= self.total_length:
             self.marker.set()
 
@@ -172,17 +174,17 @@ class ScreenshotSync():
         header_data = data[:header_len]
         data = data[header_len:]
         response_code, version, self.width, self.height = \
-          image_header.unpack(header_data)
+            image_header.unpack(header_data)
 
         if response_code is not ScreenshotSync.SCREENSHOT_OK:
             raise PebbleError(None, "Pebble responded with nonzero response "
-                "code %d, signaling an error on the watch side." %
-                response_code)
+                                    "code %d, signaling an error on the watch side." %
+                                    response_code)
 
         if version is not 1:
             raise PebbleError(None, "Received unrecognized image format "
-                "version %d from watch. Maybe your libpebble is out of "
-                "sync with your firmware version?" % version)
+                                    "version %d from watch. Maybe your libpebble is out of "
+                                    "sync with your firmware version?" % version)
 
         self.total_length = self.width * self.height
         return data
@@ -190,10 +192,11 @@ class ScreenshotSync():
     def get_data(self):
         try:
             self.marker.wait(timeout=self.timeout)
-            return Image.frombuffer('1', (self.width, self.height), \
-                self.data, "raw", "1;R", 0, 1)
+            return Image.frombuffer('1', (self.width, self.height),
+                                    self.data, "raw", "1;R", 0, 1)
         except:
             raise PebbleError(None, "Timed out... Is the Pebble phone app connected?")
+
 
 class EndpointSync():
     timeout = 10
@@ -213,56 +216,57 @@ class EndpointSync():
         except:
             raise PebbleError(None, "Timed out... Is the Pebble phone app connected?")
 
+
 class PebbleError(Exception):
-    def __init__(self, id, message):
-        self._id = id
+    def __init__(self, error_id, message):
+        self._id = error_id
         self._message = message
 
     def __str__(self):
         return "%s (ID:%s)" % (self._message, self._id)
 
-class Pebble(object):
 
+class Pebble(object):
     """
     A connection to a Pebble watch; data and commands may be sent
     to the watch through an instance of this class.
     """
 
     endpoints = {
-            "TIME": 11,
-            "VERSION": 16,
-            "PHONE_VERSION": 17,
-            "SYSTEM_MESSAGE": 18,
-            "MUSIC_CONTROL": 32,
-            "PHONE_CONTROL": 33,
-            "APPLICATION_MESSAGE": 48,
-            "LAUNCHER": 49,
-            "LOGS": 2000,
-            "PING": 2001,
-            "LOG_DUMP": 2002,
-            "RESET": 2003,
-            "APP": 2004,
-            "APP_LOGS": 2006,
-            "NOTIFICATION": 3000,
-            "RESOURCE": 4000,
-            "APP_MANAGER": 6000,
-            "SCREENSHOT": 8000,
-            "PUTBYTES": 48879,
+        "TIME": 11,
+        "VERSION": 16,
+        "PHONE_VERSION": 17,
+        "SYSTEM_MESSAGE": 18,
+        "MUSIC_CONTROL": 32,
+        "PHONE_CONTROL": 33,
+        "APPLICATION_MESSAGE": 48,
+        "LAUNCHER": 49,
+        "LOGS": 2000,
+        "PING": 2001,
+        "LOG_DUMP": 2002,
+        "RESET": 2003,
+        "APP": 2004,
+        "APP_LOGS": 2006,
+        "NOTIFICATION": 3000,
+        "RESOURCE": 4000,
+        "APP_MANAGER": 6000,
+        "SCREENSHOT": 8000,
+        "PUTBYTES": 48879,
     }
 
     log_levels = {
-            0: "*",
-            1: "E",
-            50: "W",
-            100: "I",
-            200: "D",
-            250: "V"
+        0: "*",
+        1: "E",
+        50: "W",
+        100: "I",
+        200: "D",
+        250: "V"
     }
 
 
     @staticmethod
     def AutodetectDevice():
-        if os.name != "posix": #i.e. Windows
+        if os.name != "posix":  # i.e. Windows
             raise NotImplementedError("Autodetection is only implemented on UNIX-like systems.")
 
         pebbles = glob.glob("/dev/tty.Pebble????-SerialPortSe")
@@ -274,14 +278,13 @@ class Pebble(object):
             #NOTE: Not entirely sure if this is the correct approach
             pebbles.sort(key=lambda x: os.stat(x).st_mtime, reverse=True)
 
-        id = pebbles[0][15:19]
-        log.info("Autodetect found a Pebble with ID %s" % id)
-        return id
+        pebble_id = pebbles[0][15:19]
+        log.info("Autodetect found a Pebble with ID %s" % pebble_id)
+        return pebble_id
 
 
-
-    def __init__(self, id = None):
-        self.id = id
+    def __init__(self, device_id=None):
+        self.id = device_id
         self._connection_type = None
         self._ser = None
         self._read_thread = None
@@ -289,18 +292,18 @@ class Pebble(object):
         self._ws_client = None
         self._endpoint_handlers = {}
         self._internal_endpoint_handlers = {
-                self.endpoints["TIME"]: self._get_time_response,
-                self.endpoints["VERSION"]: self._version_response,
-                self.endpoints["PHONE_VERSION"]: self._phone_version_response,
-                self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
-                self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
-                self.endpoints["APPLICATION_MESSAGE"]: self._application_message_response,
-                self.endpoints["LAUNCHER"]: self._application_message_response,
-                self.endpoints["LOGS"]: self._log_response,
-                self.endpoints["PING"]: self._ping_response,
-                self.endpoints["APP_LOGS"]: self._app_log_response,
-                self.endpoints["APP_MANAGER"]: self._appbank_status_response,
-                self.endpoints["SCREENSHOT"]: self._screenshot_response,
+            self.endpoints["TIME"]: self._get_time_response,
+            self.endpoints["VERSION"]: self._version_response,
+            self.endpoints["PHONE_VERSION"]: self._phone_version_response,
+            self.endpoints["SYSTEM_MESSAGE"]: self._system_message_response,
+            self.endpoints["MUSIC_CONTROL"]: self._music_control_response,
+            self.endpoints["APPLICATION_MESSAGE"]: self._application_message_response,
+            self.endpoints["LAUNCHER"]: self._application_message_response,
+            self.endpoints["LOGS"]: self._log_response,
+            self.endpoints["PING"]: self._ping_response,
+            self.endpoints["APP_LOGS"]: self._app_log_response,
+            self.endpoints["APP_MANAGER"]: self._appbank_status_response,
+            self.endpoints["SCREENSHOT"]: self._screenshot_response,
         }
 
     def init_reader(self):
@@ -315,24 +318,26 @@ class Pebble(object):
         except:
             raise
 
-    def connect_via_serial(self, id = None):
+    def connect_via_serial(self, device_id=None):
         self._connection_type = 'serial'
 
-        if id != None:
-            self.id = id
+        if device_id:
+            self.id = device_id
         if self.id is None:
             self.id = Pebble.AutodetectDevice()
 
         import serial
+
         devicefile = "/dev/tty.Pebble{}-SerialPortSe".format(self.id)
         log.debug("Attempting to open %s as Pebble device %s" % (devicefile, self.id))
         self._ser = serial.Serial(devicefile, 115200, timeout=1)
         self.init_reader()
 
-    def connect_via_lightblue(self, pair_first = False):
+    def connect_via_lightblue(self, pair_first=False):
         self._connection_type = 'lightblue'
 
         from LightBluePebble import LightBluePebble
+
         self._ser = LightBluePebble(self.id, pair_first)
         signal.signal(signal.SIGINT, self._exit_signal_handler)
         self.init_reader()
@@ -389,16 +394,16 @@ class Pebble(object):
             self._alive = False
             os._exit(-1)
 
-
     def _pack_message_data(self, lead, parts):
         pascal = map(lambda x: x[:255], parts)
-        d = pack("b" + reduce(lambda x,y: str(x) + "p" + str(y), map(lambda x: len(x) + 1, pascal)) + "p", lead, *pascal)
+        d = pack("b" + reduce(lambda x, y: str(x) + "p" + str(y), map(lambda x: len(x) + 1, pascal)) + "p", lead,
+                 *pascal)
         return d
 
     def _build_message(self, endpoint, data):
-        return pack("!HH", len(data), endpoint)+data
+        return pack("!HH", len(data), endpoint) + data
 
-    def _send_message(self, endpoint, data, callback = None):
+    def _send_message(self, endpoint, data, callback=None):
         if endpoint not in self.endpoints:
             raise PebbleError(self.id, "Invalid endpoint specified")
 
@@ -422,16 +427,16 @@ class Pebble(object):
         else:
             data = self._ser.read(4)
             if len(data) == 0:
-                return (None, None, None)
+                return None, None, None
             elif len(data) < 4:
-                raise PebbleError(self.id, "Malformed response with length "+str(len(data)))
+                raise PebbleError(self.id, "Malformed response with length " + str(len(data)))
             size, endpoint = unpack("!HH", data)
             resp = self._ser.read(size)
         if DEBUG_PROTOCOL:
             log.debug("Got message for endpoint %s of length %d" % (endpoint, len(resp)))
             log.debug('<<< ' + (data + resp).encode('hex'))
 
-        return ("serial", endpoint, resp)
+        return "serial", endpoint, resp
 
     def register_endpoint(self, endpoint_name, func):
         if endpoint_name not in self.endpoints:
@@ -444,7 +449,7 @@ class Pebble(object):
 
         """Send a 'SMS Notification' to the displayed on the watch."""
 
-        ts = str(int(time.time())*1000)
+        ts = str(int(time.time()) * 1000)
         parts = [sender, body, ts]
         self._send_message("NOTIFICATION", self._pack_message_data(1, parts))
 
@@ -452,7 +457,7 @@ class Pebble(object):
 
         """Send an 'Email Notification' to the displayed on the watch."""
 
-        ts = str(int(time.time())*1000)
+        ts = str(int(time.time()) * 1000)
         parts = [sender, body, ts, subject]
         self._send_message("NOTIFICATION", self._pack_message_data(0, parts))
 
@@ -467,7 +472,7 @@ class Pebble(object):
         self._send_message("SCREENSHOT", "\x00")
         return ScreenshotSync(self, "SCREENSHOT", progress_callback).get_data()
 
-    def get_versions(self, async = False):
+    def get_versions(self, async=False):
 
         """
         Retrieve a summary of version information for various software
@@ -486,12 +491,12 @@ class Pebble(object):
         if not async:
             return EndpointSync(self, "APP_MANAGER").get_data()
 
-    def describe_app_by_uuid(self, uuid, uuid_is_string=True, async = False):
+    def describe_app_by_uuid(self, uuid, uuid_is_string=True, async=False):
         if uuid_is_string:
             uuid = uuid.decode('hex')
         elif type(uuid) is uuid.UUID:
             uuid = uuid.bytes
-        # else, assume it's a byte array
+            # else, assume it's a byte array
 
         data = pack("b", 0x06) + str(uuid)
         self._send_message("APP_MANAGER", data)
@@ -499,14 +504,14 @@ class Pebble(object):
         if not async:
             return EndpointSync(self, "APP_MANAGER").get_data()
 
-    def current_running_uuid(self, async = False):
+    def current_running_uuid(self, async=False):
         data = pack("b", 0x07)
         self._send_message("APP_MANAGER", data)
         if not async:
             return EndpointSync(self, "APP_MANAGER").get_data()
 
 
-    def get_appbank_status(self, async = False):
+    def get_appbank_status(self, async=False):
 
         """
         Retrieve a list of all installed watch-apps.
@@ -518,7 +523,7 @@ class Pebble(object):
 
         if not async:
             apps = EndpointSync(self, "APP_MANAGER").get_data()
-            return apps if type(apps) is dict else { 'apps': [] }
+            return apps if type(apps) is dict else {'apps': []}
 
     def remove_app(self, appid, index, async=False):
 
@@ -530,7 +535,7 @@ class Pebble(object):
         if not async:
             return EndpointSync(self, "APP_MANAGER").get_data()
 
-    def remove_app_by_uuid(self, uuid_to_remove, uuid_is_string=True, async = False):
+    def remove_app_by_uuid(self, uuid_to_remove, uuid_is_string=True, async=False):
 
         """Remove an installed application by UUID."""
 
@@ -538,7 +543,7 @@ class Pebble(object):
             uuid_to_remove = uuid_to_remove.decode('hex')
         elif type(uuid_to_remove) is uuid.UUID:
             uuid_to_remove = uuid_to_remove.bytes
-        # else, assume it's a byte array
+            # else, assume it's a byte array
 
         data = pack("b", 0x02) + str(uuid_to_remove)
         self._send_message("APP_MANAGER", data)
@@ -546,7 +551,7 @@ class Pebble(object):
         if not async:
             return EndpointSync(self, "APP_MANAGER").get_data()
 
-    def get_time(self, async = False):
+    def get_time(self, async=False):
 
         """Retrieve the time from the Pebble's RTC."""
 
@@ -571,15 +576,12 @@ class Pebble(object):
         self._ws_client.listen()
         while not self._ws_client._received and not self._ws_client._error:
             pass
-        if self._ws_client._topic == 'status' \
-                and self._ws_client._response == 0:
+        if self._ws_client._topic == 'status' and self._ws_client._response == 0:
             log.info("Installation successful")
             return True
-        log.debug("WS Operation failed with response %s" % 
-                                        self._ws_client._response)
+        log.debug("WS Operation failed with response %s" % self._ws_client._response)
         log.error("Failed to install %s" % repr(pbw_path))
         return False
-
 
     def get_phone_info(self):
         if self._connection_type != 'ws':
@@ -587,17 +589,17 @@ class Pebble(object):
 
         self._ws_client = WSClient()
         # The first byte is reserved for future use as a protocol version ID
-        #  and must be 0 for now. 
+        #  and must be 0 for now.
         data = pack("!b", 0)
         self._ser.write(data, ws_cmd=WebSocketPebble.WS_CMD_PHONE_INFO)
         self._ws_client.listen()
         while not self._ws_client._received and not self._ws_client._error:
-          pass
+            pass
         if self._ws_client._topic == 'phoneInfo':
-          return self._ws_client._response
+            return self._ws_client._response
         else:
-          log.error('get_phone_info: Unexpected response to "%s"' % self._ws_client._topic)
-          return 'Unknown'
+            log.error('get_phone_info: Unexpected response to "%s"' % self._ws_client._topic)
+            return 'Unknown'
 
     def install_app_pebble_protocol(self, pbw_path, launch_on_install=True):
 
@@ -680,7 +682,6 @@ class Pebble(object):
             if client._error:
                 raise PebbleError(self.id, "Failed to send firmware resources %s/system_resources.pbpack" % pbz_path)
 
-
         client = PutBytesClient(self, 0, "RECOVERY" if recovery else "FIRMWARE", binary)
         self.register_endpoint("PUTBYTES", client.handle_message)
         client.init()
@@ -691,16 +692,16 @@ class Pebble(object):
 
         self.system_message("FIRMWARE_COMPLETE")
 
-    def launcher_message(self, app_uuid, key_value, uuid_is_string = True, async = False):
+    def launcher_message(self, app_uuid, key_value, uuid_is_string=True, async=False):
         """ send an appication message to launch or kill a specified application"""
 
         launcher_keys = {
-                "RUN_STATE_KEY": 1,
+            "RUN_STATE_KEY": 1,
         }
 
         launcher_key_values = {
-                "NOT_RUNNING": b'\x00',
-                "RUNNING": b'\x01'
+            "NOT_RUNNING": b'\x00',
+            "RUNNING": b'\x01'
         }
 
         if key_value not in launcher_key_values:
@@ -710,7 +711,7 @@ class Pebble(object):
             app_uuid = app_uuid.decode('hex')
         elif type(app_uuid) is uuid.UUID:
             app_uuid = app_uuid.bytes
-        #else we can assume it's a byte array
+            #else we can assume it's a byte array
 
         amsg = AppMessage()
 
@@ -741,9 +742,9 @@ class Pebble(object):
         """  Send a Dictionary with a single tuple of type CSTRING to the app corresponding to UUID """
 
         # NULL terminate and pack
-        string = string + '\0'
-        fmt =  '<' + str(len(string)) + 's'
-        string = pack(fmt, string);
+        string = '%s%s' % string, '\0'
+        fmt = '<' + str(len(string)) + 's'
+        string = pack(fmt, string)
 
         self.app_message_send_tuple(app_uuid, key, "CSTRING", string)
 
@@ -783,14 +784,14 @@ class Pebble(object):
         """
 
         commands = {
-                "FIRMWARE_AVAILABLE": 0,
-                "FIRMWARE_START": 1,
-                "FIRMWARE_COMPLETE": 2,
-                "FIRMWARE_FAIL": 3,
-                "FIRMWARE_UP_TO_DATE": 4,
-                "FIRMWARE_OUT_OF_DATE": 5,
-                "BLUETOOTH_START_DISCOVERABLE": 6,
-                "BLUETOOTH_END_DISCOVERABLE": 7
+            "FIRMWARE_AVAILABLE": 0,
+            "FIRMWARE_START": 1,
+            "FIRMWARE_COMPLETE": 2,
+            "FIRMWARE_FAIL": 3,
+            "FIRMWARE_UP_TO_DATE": 4,
+            "FIRMWARE_OUT_OF_DATE": 5,
+            "BLUETOOTH_START_DISCOVERABLE": 6,
+            "BLUETOOTH_END_DISCOVERABLE": 7
         }
         if command not in commands:
             raise PebbleError(self.id, "Invalid command \"%s\"" % command)
@@ -798,9 +799,7 @@ class Pebble(object):
         log.debug("Sending command %s (code %d)" % (command, commands[command]))
         self._send_message("SYSTEM_MESSAGE", data)
 
-
-
-    def ping(self, cookie = 0xDEC0DE, async = False):
+    def ping(self, cookie=0xDEC0DE, async=False):
 
         """Send a 'ping' to the watch to test connectivity."""
 
@@ -811,27 +810,27 @@ class Pebble(object):
             return EndpointSync(self, "PING").get_data()
 
     phone_control_commands = {
-        "ANSWER" : 1,
-        "HANGUP" : 2,
-        "GET_STATE" : 3,
-        "INCOMING_CALL" : 4,
-        "OUTGOING_CALL" : 5,
-        "MISSED_CALL" : 6,
-        "RING" : 7,
-        "START" : 8,
-        "END" : 9,
+        "ANSWER": 1,
+        "HANGUP": 2,
+        "GET_STATE": 3,
+        "INCOMING_CALL": 4,
+        "OUTGOING_CALL": 5,
+        "MISSED_CALL": 6,
+        "RING": 7,
+        "START": 8,
+        "END": 9,
     }
 
-    def phone_call_start(self, number, name, incoming = True, cookie = 0):
+    def phone_call_start(self, number, name, incoming=True, cookie=0):
 
         """Send a 'phone_control' notification for incoming call."""
 
-        fmt = "!bL" + str(1+len(number)) + "p" + str(1+len(name)) + "p"
+        fmt = "!bL" + str(1 + len(number)) + "p" + str(1 + len(name)) + "p"
         event = "INCOMING_CALL" if incoming else "OUTGOING_CALL"
         data = pack(fmt, self.phone_control_commands[event], cookie, number, name)
         self._send_message("PHONE_CONTROL", data)
 
-    def phone_event(self, event, cookie = 0):
+    def phone_event(self, event, cookie=0):
 
         """Send a 'phone_control' notification of start."""
 
@@ -872,7 +871,7 @@ class Pebble(object):
                     return
                 elif response_type != 0x80 or response_cookie != cookie:
                     log.info("Received unexpected message with type 0x%x cookie %u expected 0x80 %u" %
-                        (response_type, response_cookie, cookie))
+                             (response_type, response_cookie, cookie))
                     self.done = True
                     return
 
@@ -886,6 +885,7 @@ class Pebble(object):
         self.register_endpoint("LOG_DUMP", client.parse_log_dump_response)
 
         import random
+
         cookie = random.randint(0, pow(2, 32) - 1)
         self._send_message("LOG_DUMP", pack("!BBI", 0x10, generation_number, cookie))
 
@@ -934,14 +934,14 @@ class Pebble(object):
     def _parse_log_response(self, log_message_data):
         timestamp, level, msgsize, linenumber = unpack("!IBBH", log_message_data[:8])
         filename = log_message_data[8:24].decode('utf-8')
-        message = log_message_data[24:24+msgsize].decode('utf-8')
+        message = log_message_data[24:24 + msgsize].decode('utf-8')
 
         str_level = self.log_levels[level] if level in self.log_levels else "?"
 
         return timestamp, str_level, filename, linenumber, message
 
     def _log_response(self, endpoint, data):
-        if (len(data) < 8):
+        if len(data) < 8:
             log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
             return
 
@@ -954,6 +954,7 @@ class Pebble(object):
         # Read the current projects UUID from it's appinfo.json. If we can't do this or the uuid doesn't match
         # the uuid of the crashed app we don't print anything.
         from PblProjectCreator import check_project_directory, PebbleProjectException
+
         try:
             check_project_directory()
         except PebbleProjectException:
@@ -970,17 +971,15 @@ class Pebble(object):
                 log.warn(str(e))
                 return
 
-        if (app_uuid != crashed_uuid):
+        if app_uuid != crashed_uuid:
             # Someone other than us crashed, just bail
             return
-
 
         if not os.path.exists(APP_ELF_PATH):
             log.warn("Could not look up debugging symbols.")
             log.warn("Could not find ELF file: %s" % APP_ELF_PATH)
             log.warn("Please try rebuilding your project")
             return
-
 
         def print_register(register_name, addr_str):
             if (addr_str[0] == '?') or (int(addr_str, 16) > 0x20000):
@@ -999,13 +998,11 @@ class Pebble(object):
         print_register("Program Counter (PC)", crashed_pc)
         print_register("Link Register (LR)", crashed_lr)
 
-
     def _app_log_response(self, endpoint, data):
-        if (len(data) < 8):
+        if len(data) < 8:
             log.warn("Unable to decode log message (length %d is less than 8)" % len(data))
             return
 
-        app_uuid = uuid.UUID(bytes=data[0:16])
         timestamp, str_level, filename, linenumber, message = self._parse_log_response(data[16:])
 
         log.info("{} {}:{} {}".format(str_level, filename, linenumber, message))
@@ -1022,16 +1019,17 @@ class Pebble(object):
     def _appbank_status_response(self, endpoint, data):
         def unpack_uuid(data):
             UUID_FORMAT = "{}{}{}{}-{}{}-{}{}-{}{}-{}{}{}{}{}{}"
-            uuid = unpack("!bbbbbbbbbbbbbbbb", data)
-            uuid = ["%02x" % (x & 0xff) for x in uuid]
+            uuid = ["%02x" % (x & 0xff) for x in unpack("!bbbbbbbbbbbbbbbb", data)]
+
             return UUID_FORMAT.format(*uuid)
+
         apps = {}
         restype, = unpack("!b", data[0])
 
         app_install_message = {
-                0: "app available",
-                1: "app removed",
-                2: "app updated"
+            0: "app available",
+            1: "app removed",
+            2: "app updated"
         }
 
         if restype == 1:
@@ -1044,13 +1042,13 @@ class Pebble(object):
                 app = {}
                 try:
                     app["id"], app["index"], app["name"], app["company"], app["flags"], app["version"] = \
-                            unpack("!II32s32sIH", data[offset:offset+appinfo_size])
+                        unpack("!II32s32sIH", data[offset:offset + appinfo_size])
                     app["name"] = app["name"].replace("\x00", "")
                     app["company"] = app["company"].replace("\x00", "")
                     apps["apps"] += [app]
                 except:
-                    if offset+appinfo_size > len(data):
-                        log.warn("Couldn't load bank %d; remaining data = %s" % (i,repr(data[offset:])))
+                    if offset + appinfo_size > len(data):
+                        log.warn("Couldn't load bank %d; remaining data = %s" % (i, repr(data[offset:])))
                     else:
                         raise
                 offset += appinfo_size
@@ -1069,7 +1067,7 @@ class Pebble(object):
             uuid_size = 16
             offset = 5
             for i in xrange(apps_installed):
-                uuid = unpack_uuid(data[offset:offset+uuid_size])
+                uuid = unpack_uuid(data[offset:offset + uuid_size])
                 offset += uuid_size
                 uuids.append(uuid)
             return uuids
@@ -1090,18 +1088,18 @@ class Pebble(object):
 
     def _version_response(self, endpoint, data):
         fw_names = {
-                0: "normal_fw",
-                1: "recovery_fw"
+            0: "normal_fw",
+            1: "recovery_fw"
         }
 
         resp = {}
         for i in xrange(2):
             fwver_size = 47
-            offset = i*fwver_size+1
+            offset = i * fwver_size + 1
             fw = {}
-            fw["timestamp"],fw["version"],fw["commit"],fw["is_recovery"], \
-                    fw["hardware_platform"],fw["metadata_ver"] = \
-                    unpack("!i32s8s?bb", data[offset:offset+fwver_size])
+            fw["timestamp"], fw["version"], fw["commit"], fw["is_recovery"], \
+            fw["hardware_platform"], fw["metadata_ver"] = \
+                unpack("!i32s8s?bb", data[offset:offset + fwver_size])
 
             fw["version"] = fw["version"].replace("\x00", "")
             fw["commit"] = fw["commit"].replace("\x00", "")
@@ -1109,22 +1107,22 @@ class Pebble(object):
             fw_name = fw_names[i]
             resp[fw_name] = fw
 
-        resp["bootloader_timestamp"],resp["hw_version"],resp["serial"] = \
-                unpack("!L9s12s", data[95:120])
+        resp["bootloader_timestamp"], resp["hw_version"], resp["serial"] = \
+            unpack("!L9s12s", data[95:120])
 
-        resp["hw_version"] = resp["hw_version"].replace("\x00","")
+        resp["hw_version"] = resp["hw_version"].replace("\x00", "")
 
         btmac_hex = binascii.hexlify(data[120:126])
-        resp["btmac"] = ":".join([btmac_hex[i:i+2].upper() for i in reversed(xrange(0, 12, 2))])
+        resp["btmac"] = ":".join([btmac_hex[i:i + 2].upper() for i in reversed(xrange(0, 12, 2))])
 
         return resp
 
     def _application_message_response(self, endpoint, data):
         app_messages = {
-                b'\x01': "PUSH",
-                b'\x02': "REQUEST",
-                b'\xFF': "ACK",
-                b'\x7F': "NACK"
+            b'\x01': "PUSH",
+            b'\x02': "REQUEST",
+            b'\xFF': "ACK",
+            b'\x7F': "NACK"
         }
 
         if len(data) > 1:
@@ -1134,28 +1132,27 @@ class Pebble(object):
         if data[0] in app_messages:
             return app_messages[data[0]] + rest
 
-
     def _phone_version_response(self, endpoint, data):
         session_cap = {
-                "GAMMA_RAY" : 0x80000000,
+            "GAMMA_RAY": 0x80000000,
         }
         remote_cap = {
-                "TELEPHONY" : 16,
-                "SMS" : 32,
-                "GPS" : 64,
-                "BTLE" : 128,
-                "CAMERA_REAR" : 256,
-                "ACCEL" : 512,
-                "GYRO" : 1024,
-                "COMPASS" : 2048,
+            "TELEPHONY": 16,
+            "SMS": 32,
+            "GPS": 64,
+            "BTLE": 128,
+            "CAMERA_REAR": 256,
+            "ACCEL": 512,
+            "GYRO": 1024,
+            "COMPASS": 2048,
         }
         os = {
-                "UNKNOWN" : 0,
-                "IOS" : 1,
-                "ANDROID" : 2,
-                "OSX" : 3,
-                "LINUX" : 4,
-                "WINDOWS" : 5,
+            "UNKNOWN": 0,
+            "IOS": 1,
+            "ANDROID": 2,
+            "OSX": 3,
+            "LINUX": 4,
+            "WINDOWS": 5,
         }
 
         # Then session capabilities, android adds GAMMA_RAY and it's
@@ -1167,21 +1164,21 @@ class Pebble(object):
         remote = remote_cap["TELEPHONY"] | remote_cap["SMS"] | os["ANDROID"]
 
         msg = pack("!biII", 1, -1, session, remote)
-        self._send_message("PHONE_VERSION", msg);
+        self._send_message("PHONE_VERSION", msg)
 
     def _music_control_response(self, endpoint, data):
         event, = unpack("!b", data)
 
         event_names = {
-                1: "PLAYPAUSE",
-                2: "PAUSE",
-                3: "PLAY",
-                4: "NEXT",
-                5: "PREVIOUS",
-                6: "VOLUME_UP",
-                7: "VOLUME_DOWN",
-                8: "GET_NOW_PLAYING",
-                9: "SEND_NOW_PLAYING",
+            1: "PLAYPAUSE",
+            2: "PAUSE",
+            3: "PLAY",
+            4: "NEXT",
+            5: "PREVIOUS",
+            6: "VOLUME_UP",
+            7: "VOLUME_DOWN",
+            8: "GET_NOW_PLAYING",
+            9: "SEND_NOW_PLAYING",
         }
 
         return event_names[event] if event in event_names else None
@@ -1193,18 +1190,18 @@ class AppMessage(object):
         """ make a single app_message tuple"""
         # available app message datatypes:
         tuple_datatypes = {
-                "BYTE_ARRAY": b'\x00',
-                "CSTRING": b'\x01',
-                "UINT": b'\x02',
-                "INT": b'\x03'
+            "BYTE_ARRAY": b'\x00',
+            "CSTRING": b'\x01',
+            "UINT": b'\x02',
+            "INT": b'\x03'
         }
 
         # build the message_tuple
         app_message_tuple = OrderedDict([
-                ("KEY", pack('<L', key)),
-                ("TYPE", tuple_datatypes[data_type]),
-                ("LENGTH", pack('<H', len(data))),
-                ("DATA", data)
+            ("KEY", pack('<L', key)),
+            ("TYPE", tuple_datatypes[data_type]),
+            ("LENGTH", pack('<H', len(data))),
+            ("DATA", data)
         ])
 
         return app_message_tuple
@@ -1217,8 +1214,8 @@ class AppMessage(object):
         tuple_total_bytes = ''.join(item for item in itertools.chain(*tuple_of_tuples.values()))
         # now build the dict
         app_message_dict = OrderedDict([
-                ("TUPLECOUNT", pack('B', tuple_count)),
-                ("TUPLE", tuple_total_bytes)
+            ("TUPLECOUNT", pack('B', tuple_count)),
+            ("TUPLE", tuple_total_bytes)
         ])
         return app_message_dict
 
@@ -1227,83 +1224,83 @@ class AppMessage(object):
         # NOTE: uuid must be a byte array
         # available app_message commands:
         app_messages = {
-                "PUSH": b'\x01',
-                "REQUEST": b'\x02',
-                "ACK": b'\xFF',
-                "NACK": b'\x7F'
+            "PUSH": b'\x01',
+            "REQUEST": b'\x02',
+            "ACK": b'\xFF',
+            "NACK": b'\x7F'
         }
         # finally build the entire message
         app_message = OrderedDict([
-                ("COMMAND", app_messages[command]),
-                ("TRANSACTIONID", transaction_id),
-                ("UUID", uuid),
-                ("DICT", ''.join(dict_of_tuples.values()))
+            ("COMMAND", app_messages[command]),
+            ("TRANSACTIONID", transaction_id),
+            ("UUID", uuid),
+            ("DICT", ''.join(dict_of_tuples.values()))
         ])
         return ''.join(app_message.values())
 
 
 class WSClient(object):
     states = {
-      "IDLE": 0,
-      "LISTENING": 1,
+        "IDLE": 0,
+        "LISTENING": 1,
     }
 
     def __init__(self):
-      self._state = self.states["IDLE"]
-      self._response = None
-      self._topic = None
-      self._received = False
-      self._error = False
-      self._timer = threading.Timer(30.0, self.timeout)
+        self._state = self.states["IDLE"]
+        self._response = None
+        self._topic = None
+        self._received = False
+        self._error = False
+        self._timer = threading.Timer(30.0, self.timeout)
 
     def timeout(self):
-      if (self._state != self.states["LISTENING"]):
-        log.error("Timeout triggered when not listening")
-        return
-      self._error = True
-      self._received = False
-      self._state = self.states["IDLE"]
+        if self._state != self.states["LISTENING"]:
+            log.error("Timeout triggered when not listening")
+            return
+        self._error = True
+        self._received = False
+        self._state = self.states["IDLE"]
 
     def listen(self):
-      self._state = self.states["LISTENING"]
-      self._received = False
-      self._error = False
-      self._timer.start()
+        self._state = self.states["LISTENING"]
+        self._received = False
+        self._error = False
+        self._timer.start()
 
     def handle_response(self, topic, response):
-      if self._state != self.states["LISTENING"]:
-        log.debug("Unexpected status message")
-        self._error = True
+        if self._state != self.states["LISTENING"]:
+            log.debug("Unexpected status message")
+            self._error = True
 
-      self._timer.cancel()
-      self._topic = topic
-      self._response = response;
-      self._received = True
+        self._timer.cancel()
+        self._topic = topic
+        self._response = response
+        self._received = True
 
 
 class PutBytesClient(object):
     states = {
-            "NOT_STARTED": 0,
-            "WAIT_FOR_TOKEN": 1,
-            "IN_PROGRESS": 2,
-            "COMMIT": 3,
-            "COMPLETE": 4,
-            "FAILED": 5
+        "NOT_STARTED": 0,
+        "WAIT_FOR_TOKEN": 1,
+        "IN_PROGRESS": 2,
+        "COMMIT": 3,
+        "COMPLETE": 4,
+        "FAILED": 5
     }
 
     transfer_types = {
-            "FIRMWARE": 1,
-            "RECOVERY": 2,
-            "SYS_RESOURCES": 3,
-            "RESOURCES": 4,
-            "BINARY": 5
+        "FIRMWARE": 1,
+        "RECOVERY": 2,
+        "SYS_RESOURCES": 3,
+        "RESOURCES": 4,
+        "BINARY": 5
     }
 
-    def __init__(self, pebble, index, transfer_type, buffer):
+    def __init__(self, pebble, index, transfer_type, byte_buffer):
         self._pebble = pebble
         self._state = self.states["NOT_STARTED"]
         self._transfer_type = self.transfer_types[transfer_type]
-        self._buffer = buffer
+        self._buffer = byte_buffer
         self._index = index
         self._done = False
         self._error = False
@@ -1331,7 +1328,7 @@ class PutBytesClient(object):
             return
         if self._left > 0:
             self.send()
-            log.debug("Sent %d of %d bytes" % (len(self._buffer)-self._left, len(self._buffer)))
+            log.debug("Sent %d of %d bytes" % (len(self._buffer) - self._left, len(self._buffer)))
         else:
             self._state = self.states["COMMIT"]
             self.commit()
@@ -1365,10 +1362,10 @@ class PutBytesClient(object):
         self._error = True
 
     def send(self):
-        datalen =  min(self._left, 2000)
-        rg = len(self._buffer)-self._left
+        datalen = min(self._left, 2000)
+        rg = len(self._buffer) - self._left
         msgdata = pack("!bII", 2, self._token & 0xFFFFFFFF, datalen)
-        msgdata += self._buffer[rg:rg+datalen]
+        msgdata += self._buffer[rg:rg + datalen]
         self._pebble._send_message("PUTBYTES", msgdata)
         self._left -= datalen
 

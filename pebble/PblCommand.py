@@ -1,10 +1,11 @@
 import os
 
+
 class PblCommand:
     name = ''
     help = ''
 
-    def run(args):
+    def run(args, **kwargs):
         pass
 
     def configure_subparser(self, parser):

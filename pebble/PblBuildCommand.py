@@ -1,16 +1,16 @@
-
 import logging
-import sh, os, subprocess
+import os
+import subprocess
 import json
 import StringIO
-import traceback
 import sys
 
-import PblAnalytics
+import sh
 from PblCommand import PblCommand
 from PblProjectCreator import requires_project_dir
 from LibPebblesCommand import (NoCompilerException, BuildErrorException,
                                AppTooBigException)
+
 
 
 
@@ -31,17 +31,17 @@ def create_sh_cmd_obj(cmdPath):
     includes a directory path in it, you must use this sh.Command()
     syntax.  
     """
-    
+
     cmdObj = sh.Command(cmdPath)
-    
+
     # By checking the _path member of the cmdObj, we can do a pre-flight to 
     # detect this situation and raise a more friendly error message
     if cmdObj._path is None:
         raise RuntimeError("The executable %s could not be "
                            "found. " % (cmdPath))
-    
+
     return cmdObj
-    
+
 
 ###############################################################################
 ###############################################################################
@@ -53,8 +53,8 @@ class PblWafCommand(PblCommand):
     ###########################################################################
     def waf_path(self, args):
         return os.path.join(os.path.join(self.sdk_path(args), 'Pebble'), 'waf')
-    
-    
+
+
     ###########################################################################
     def _send_memory_usage(self, args, appInfo):
         """ Send app memory usage to analytics 
@@ -64,16 +64,16 @@ class PblWafCommand(PblCommand):
         args: the args passed to the run() method
         appInfo: the applications appInfo
         """
-        
+
         cmdName = 'arm_none_eabi_size'
         cmdArgs = [os.path.join("build", "pebble-app.elf")]
         try:
             output = sh.arm_none_eabi_size(*cmdArgs)
             (textSize, dataSize, bssSize) = [int(x) for x in \
-                                     output.stdout.splitlines()[1].split()[:3]]
+                                             output.stdout.splitlines()[1].split()[:3]]
             sizeDict = {'text': textSize, 'data': dataSize, 'bss': bssSize}
-            PblAnalytics.code_size_evt(uuid=appInfo["uuid"], 
-                                    segSizes = sizeDict)
+            PblAnalytics.code_size_evt(uuid=appInfo["uuid"],
+                                       segSizes=sizeDict)
         except sh.ErrorReturnCode as e:
             logging.error("command %s %s failed. stdout: %s, stderr: %s" %
                           (cmdName, ' '.join(cmdArgs), e.stdout, e.stderr))
@@ -92,7 +92,7 @@ class PblWafCommand(PblCommand):
         path: directory name to search
         exts: list of extensions to include in the search, i.e. ['.c', '.h']
         """
-        
+
         srcLines = 0
         files = os.listdir(path)
         for name in files:
@@ -106,7 +106,7 @@ class PblWafCommand(PblCommand):
             if ext in exts:
                 srcLines += sum(1 for line in open(os.path.join(path, name)))
         return srcLines
-    
+
 
     ###########################################################################
     def _send_line_counts(self, args, appInfo):
@@ -117,16 +117,16 @@ class PblWafCommand(PblCommand):
         args: the args passed to the run() method
         appInfo: the applications appInfo
         """
-        
+
         c_line_count = 0
         js_line_count = 0
         if os.path.exists('src'):
             c_line_count += self._count_lines('src', ['.h', '.c'])
             js_line_count += self._count_lines('src', ['.js'])
 
-        PblAnalytics.code_line_count_evt(uuid=appInfo["uuid"], 
-                                c_line_count = c_line_count,
-                                js_line_count = js_line_count)
+        PblAnalytics.code_line_count_evt(uuid=appInfo["uuid"],
+                                         c_line_count=c_line_count,
+                                         js_line_count=js_line_count)
 
 
     ###########################################################################
@@ -138,21 +138,21 @@ class PblWafCommand(PblCommand):
         args: the args passed to the run() method
         appInfo: the applications appInfo
         """
-        
+
         # Collect the number and total size of each class of resource:
         resCounts = {"raw": 0, "image": 0, "font": 0}
         resSizes = {"raw": 0, "image": 0, "font": 0}
-        
+
         for resDict in appInfo["resources"]["media"]:
             if resDict["type"] in ["png", "png-trans"]:
                 type = "image"
-            elif resDict["type"] in ["font"]: 
+            elif resDict["type"] in ["font"]:
                 type = "font"
             elif resDict["type"] in ["raw"]:
                 type = "raw"
             else:
-                raise RuntimeError("Unsupported resource type %s" % 
-                                (resDict["type"]))
+                raise RuntimeError("Unsupported resource type %s" %
+                                   (resDict["type"]))
 
             # Look for the generated blob in the build/resource directory.
             # As far as we can tell, the generated blob always starts with
@@ -168,26 +168,26 @@ class PblWafCommand(PblCommand):
                     break
             if not found:
                 raise RuntimeError("Could not find generated resource "
-                            "corresponding to %s." % (resDict["file"]))
-                
+                                   "corresponding to %s." % (resDict["file"]))
+
             resCounts[type] += 1
             resSizes[type] += size
-            
+
         # Send the stats now
         PblAnalytics.res_sizes_evt(uuid=appInfo["uuid"],
-                                 resCounts = resCounts,
-                                 resSizes = resSizes)
-                
+                                   resCounts=resCounts,
+                                   resSizes=resSizes)
+
 
     ###########################################################################
     @requires_project_dir
     def run(self, args):
-        os.environ['PATH'] = "{}:{}".format(os.path.join(self.sdk_path(args), 
-                                "arm-cs-tools", "bin"), os.environ['PATH'])
-        
+        os.environ['PATH'] = "{}:{}".format(os.path.join(self.sdk_path(args),
+                                                         "arm-cs-tools", "bin"), os.environ['PATH'])
+
         cmdLine = self.waf_path(args) + " " + self.waf_cmds
         retval = subprocess.call(cmdLine, shell=True)
-        
+
         # If an error occurred, we need to do some sleuthing to determine a
         # cause. This allows the caller to post more useful information to
         # analytics. We normally don't capture stdout and stderr using Poepn()
@@ -196,7 +196,7 @@ class PblWafCommand(PblCommand):
         #
         # But, if an error occurs, let's run it again capturing the output
         #  so we can determine the cause
-          
+
         if (retval):
             cmdArgs = cmdLine.split()
             try:
@@ -204,18 +204,18 @@ class PblWafCommand(PblCommand):
                 output = cmdObj(*cmdArgs[1:])
                 stderr = output.stderr
             except sh.ErrorReturnCode as e:
-                stderr = e.stderr        
-                 
-            # Look for common problems
+                stderr = e.stderr
+
+                # Look for common problems
             if "Could not determine the compiler version" in stderr:
                 raise NoCompilerException
-            
+
             elif "region `APP' overflowed" in stderr:
                 raise AppTooBigException
-            
+
             else:
                 raise BuildErrorException
-            
+
         elif args.command == 'build':
             # No error building. Send up app memory usage and resource usage
             #  up to analytics
@@ -227,12 +227,12 @@ class PblWafCommand(PblCommand):
                 self._send_line_counts(args, appInfo)
                 hasJS = os.path.exists(os.path.join('src', 'js'))
                 PblAnalytics.code_has_java_script_evt(uuid=appInfo["uuid"],
-                                         hasJS=hasJS)
+                                                      hasJS=hasJS)
             except Exception as e:
                 logging.error("Exception occurred collecting app analytics: "
                               "%s" % str(e))
                 logging.debug(traceback.format_exc())
-            
+
         return 0
 
     ###########################################################################

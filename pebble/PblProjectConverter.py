@@ -6,8 +6,8 @@ import shutil
 from PblCommand import PblCommand
 from PblProjectCreator import *
 
-def read_c_code(c_file_path):
 
+def read_c_code(c_file_path):
     C_SINGLELINE_COMMENT_PATTERN = '//.*'
     C_MULTILINE_COMMENT_PATTERN = '/\*.*\*/'
 
@@ -19,8 +19,8 @@ def read_c_code(c_file_path):
 
         return c_code
 
-def convert_c_uuid(c_uuid):
 
+def convert_c_uuid(c_uuid):
     C_UUID_BYTE_PATTERN = '0x([0-9A-Fa-f]{2})'
     C_UUID_PATTERN = '^{\s*' + '\s*,\s*'.join([C_UUID_BYTE_PATTERN] * 16) + '\s*}$'
 
@@ -32,14 +32,15 @@ def convert_c_uuid(c_uuid):
     else:
         return c_uuid
 
-def extract_c_macros_from_code(c_code, macros={}):
 
+def extract_c_macros_from_code(c_code, macros={}):
     C_IDENTIFIER_PATTERN = '[A-Za-z_]\w*'
-    C_DEFINE_PATTERN = '#define\s+('+C_IDENTIFIER_PATTERN+')\s+\(*(.+)\)*\s*'
+    C_DEFINE_PATTERN = '#define\s+(' + C_IDENTIFIER_PATTERN + ')\s+\(*(.+)\)*\s*'
 
     for m in re.finditer(C_DEFINE_PATTERN, c_code):
         groups = m.groups()
         macros[groups[0]] = groups[1].strip()
+
 
 def extract_c_macros_from_project(project_root, macros={}):
     src_path = os.path.join(project_root, 'src')
@@ -50,8 +51,8 @@ def extract_c_macros_from_project(project_root, macros={}):
 
     return macros
 
-def convert_c_expr_dict(c_expr_dict, project_root):
 
+def convert_c_expr_dict(c_expr_dict, project_root):
     C_STRING_PATTERN = '^"(.*)"$'
 
     macros = extract_c_macros_from_project(project_root)
@@ -72,26 +73,26 @@ def convert_c_expr_dict(c_expr_dict, project_root):
 
     return c_expr_dict
 
-def find_pbl_app_info(project_root):
 
+def find_pbl_app_info(project_root):
     C_LITERAL_PATTERN = '([^,]+|"[^"]*")'
 
     PBL_APP_INFO_PATTERN = (
-            'PBL_APP_INFO(?:_SIMPLE)?\(\s*' +
-            '\s*,\s*'.join([C_LITERAL_PATTERN] * 4) +
-            '(?:\s*,\s*' + '\s*,\s*'.join([C_LITERAL_PATTERN] * 3) + ')?' +
-            '\s*\)'
-            )
+        'PBL_APP_INFO(?:_SIMPLE)?\(\s*' +
+        '\s*,\s*'.join([C_LITERAL_PATTERN] * 4) +
+        '(?:\s*,\s*' + '\s*,\s*'.join([C_LITERAL_PATTERN] * 3) + ')?' +
+        '\s*\)'
+    )
 
     PBL_APP_INFO_FIELDS = [
-            'uuid',
-            'name',
-            'company_name',
-            'version_major',
-            'version_minor',
-            'menu_icon',
-            'type'
-            ]
+        'uuid',
+        'name',
+        'company_name',
+        'version_major',
+        'version_minor',
+        'menu_icon',
+        'type'
+    ]
 
     src_path = os.path.join(project_root, 'src')
     for root, dirnames, filenames in os.walk(src_path):
@@ -101,8 +102,8 @@ def find_pbl_app_info(project_root):
             if m:
                 return dict(zip(PBL_APP_INFO_FIELDS, m.groups()))
 
-def extract_c_appinfo(project_root):
 
+def extract_c_appinfo(project_root):
     appinfo_c_def = find_pbl_app_info(project_root)
     if not appinfo_c_def:
         raise Exception("Could not find usage of PBL_APP_INFO")
@@ -127,6 +128,7 @@ def extract_c_appinfo(project_root):
 
     return appinfo_json_def
 
+
 def load_app_keys(js_appinfo_path):
     with open(js_appinfo_path, "r") as f:
         try:
@@ -137,8 +139,8 @@ def load_app_keys(js_appinfo_path):
         app_keys = json.dumps(app_keys, indent=2)
         return re.sub('\s*\n', '\n  ', app_keys)
 
-def load_resources_map(resources_map_path, menu_icon_name=None):
 
+def load_resources_map(resources_map_path, menu_icon_name=None):
     C_RESOURCE_PREFIX = 'RESOURCE_ID_'
 
     def convert_resources_media_item(item):
@@ -164,6 +166,7 @@ def load_resources_map(resources_map_path, menu_icon_name=None):
         resources_media = json.dumps(resources_media, indent=2)
         return re.sub('\s*\n', '\n    ', resources_media)
 
+
 def generate_appinfo_from_old_project(project_root, js_appinfo_path=None, resources_media_path=None):
     appinfo_json_def = extract_c_appinfo(project_root)
 
@@ -177,6 +180,7 @@ def generate_appinfo_from_old_project(project_root, js_appinfo_path=None, resour
     with open(os.path.join(project_root, "appinfo.json"), "w") as f:
         f.write(FILE_DUMMY_APPINFO.substitute(**appinfo_json_def))
 
+
 def convert_project():
     project_root = os.getcwd()
 
@@ -186,18 +190,18 @@ def convert_project():
     resources_media_path = os.path.join(project_root, os.path.join(resources_path, 'resource_map.json'))
 
     generate_appinfo_from_old_project(
-            project_root,
-            js_appinfo_path=js_appinfo_path,
-            resources_media_path=resources_media_path)
+        project_root,
+        js_appinfo_path=js_appinfo_path,
+        resources_media_path=resources_media_path)
 
     links_to_remove = [
-            'include',
-            'lib',
-            'pebble_app.ld',
-            'tools',
-            'waf',
-            'wscript'
-            ]
+        'include',
+        'lib',
+        'pebble_app.ld',
+        'tools',
+        'waf',
+        'wscript'
+    ]
 
     for l in links_to_remove:
         if os.path.islink(l):
@@ -228,6 +232,7 @@ def convert_project():
             os.rmdir(resources_path)
         except:
             raise Exception("Could not move all files in {} up one level".format(resources_path))
+
 
 class PblProjectConverter(PblCommand):
     name = 'convert-project'

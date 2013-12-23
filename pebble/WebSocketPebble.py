@@ -1,9 +1,11 @@
 import errno
 import sys
 import logging
-from websocket import *
 from struct import unpack
 from struct import pack
+
+from websocket import *
+
 
 # This file contains the libpebble websocket client.
 # Based on websocket.py from:
@@ -17,11 +19,12 @@ WS_CMD_APP_INSTALL = 0x04
 WS_CMD_STATUS = 0x5
 WS_CMD_PHONE_INFO = 0x06
 
+
 class WebSocketPebble(WebSocket):
 
 ######## libPebble Bridge Methods #########
 
-    def write(self, payload, opcode = ABNF.OPCODE_BINARY, ws_cmd = WS_CMD_PHONE_TO_WATCH):
+    def write(self, payload, opcode=ABNF.OPCODE_BINARY, ws_cmd=WS_CMD_PHONE_TO_WATCH):
         """
         BRIDGES THIS METHOD:
         def write(self, message):
@@ -76,30 +79,29 @@ class WebSocketPebble(WebSocket):
             
         """
         opcode, data = self.recv_data()
-        ws_cmd = unpack('!b',data[0])
-        if ws_cmd[0]==WS_CMD_SERVER_LOG:
+        ws_cmd = unpack('!b', data[0])
+        if ws_cmd[0] == WS_CMD_SERVER_LOG:
             logging.debug("Server: %s" % repr(data[1:]))
-        if ws_cmd[0]==WS_CMD_PHONE_APP_LOG:
+        if ws_cmd[0] == WS_CMD_PHONE_APP_LOG:
             logging.debug("Log: %s" % repr(data[1:]))
             return ('ws', 'log', data[1:], data)
-        if ws_cmd[0]==WS_CMD_PHONE_TO_WATCH:
+        if ws_cmd[0] == WS_CMD_PHONE_TO_WATCH:
             logging.debug("Phone ==> Watch: %s" % data[1:].encode("hex"))
-        if ws_cmd[0]==WS_CMD_WATCH_TO_PHONE:
+        if ws_cmd[0] == WS_CMD_WATCH_TO_PHONE:
             logging.debug("Watch ==> Phone: %s" % data[1:].encode("hex"))
             size, endpoint = unpack("!HH", data[1:5])
             resp = data[5:]
             return ('watch', endpoint, resp, data[1:5])
-        if ws_cmd[0]==WS_CMD_STATUS:
+        if ws_cmd[0] == WS_CMD_STATUS:
             logging.debug("Status: %s" % repr(data[1:]))
             status = unpack("I", data[1:5])[0]
             return ('ws', 'status', status, data[1:5])
-        if ws_cmd[0]==WS_CMD_PHONE_INFO:
+        if ws_cmd[0] == WS_CMD_PHONE_INFO:
             logging.debug("Phone info: %s" % repr(data[1:]))
             response = data[1:]
             return ('ws', 'phoneInfo', response, data)
         else:
             return (None, None, None, data)
-
 
 
 ######################################
@@ -139,7 +141,7 @@ def create_connection(host, port=9000, timeout=None, connect_timeout=None, **opt
     except socket.error as e:
         if e.errno == errno.ECONNREFUSED:
             logging.error("Could not connect to phone at {}:{}. "
-                      "Ensure that 'Developer Connection' is enabled in the Pebble app.".format(host, port))
+                          "Ensure that 'Developer Connection' is enabled in the Pebble app.".format(host, port))
             os._exit(-1)
         else:
             raise e
@@ -148,12 +150,10 @@ def create_connection(host, port=9000, timeout=None, connect_timeout=None, **opt
         os._exit(-1)
     return websock
 
-_MAX_INTEGER = (1 << 32) -1
+
+_MAX_INTEGER = (1 << 32) - 1
 _AVAILABLE_KEY_CHARS = range(0x21, 0x2f + 1) + range(0x3a, 0x7e + 1)
-_MAX_CHAR_BYTE = (1<<8) -1
-
-
-
+_MAX_CHAR_BYTE = (1 << 8) - 1
 
 if __name__ == "__main__":
     enableTrace(True)

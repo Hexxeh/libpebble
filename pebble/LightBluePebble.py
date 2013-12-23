@@ -8,6 +8,7 @@ import socket
 from multiprocessing import Process
 from struct import unpack
 
+
 class LightBluePebbleError(Exception):
     def __init__(self, id, message):
         self._id = id
@@ -15,6 +16,7 @@ class LightBluePebbleError(Exception):
 
     def __str__(self):
         return "%s ID:(%s) on LightBlue API" % (self._message, self._id)
+
 
 class LightBluePebble(object):
     """ a wrapper for LightBlue that provides Serial-style read, write and close"""
@@ -40,7 +42,8 @@ class LightBluePebble(object):
         # wait for a successful connection from child process before returning to main process
         self.bt_connected.wait(connection_process_timeout)
         if not self.bt_connected.is_set():
-            raise LightBluePebbleError(id, "Connection timed out, LightBlueProcess was provided %d seconds to complete connecting" % connection_process_timeout)
+            raise LightBluePebbleError(id,
+                                       "Connection timed out, LightBlueProcess was provided %d seconds to complete connecting" % connection_process_timeout)
 
     def write(self, message):
         """ send a message to the LightBlue processs"""
@@ -154,7 +157,7 @@ class LightBluePebble(object):
                 resp = ''
                 while len(resp) < size:
                     try:
-                        resp += self._bts.recv(size-len(resp))
+                        resp += self._bts.recv(size - len(resp))
                     except (socket.timeout, socket.error):
                         # Exception raised from timing out on nonblocking
                         # TODO: Should probably have some kind of timeout here
