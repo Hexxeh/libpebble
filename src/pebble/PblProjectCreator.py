@@ -4,13 +4,16 @@ import uuid
 
 from PblCommand import PblCommand
 
+
 class PblProjectCreator(PblCommand):
     name = 'new-project'
     help = 'Create a new Pebble project'
 
     def configure_subparser(self, parser):
-        parser.add_argument("name", help = "Name of the project you want to create")
-        parser.add_argument("--javascript", action="store_true", help = "Generate javascript related files")
+        parser.add_argument("name",
+                            help="Name of the project you want to create")
+        parser.add_argument("--javascript", action="store_true",
+                            help="Generate javascript related files")
 
     def run(self, args):
         print "Creating new project {}".format(args.name)
@@ -28,7 +31,8 @@ class PblProjectCreator(PblCommand):
         os.makedirs(project_src)
 
         # Create main .c file
-        with open(os.path.join(project_src, "%s.c" % (project_name)), "w") as f:
+        with open(os.path.join(project_src, "%s.c" % project_name),
+                  "w") as f:
             f.write(FILE_DUMMY_MAIN)
 
         # Add wscript file
@@ -50,9 +54,9 @@ class PblProjectCreator(PblCommand):
             project_js_src = os.path.join(project_src, "js")
             os.makedirs(project_js_src)
 
-            with open(os.path.join(project_js_src, "pebble-js-app.js"), "w") as f:
+            with open(os.path.join(project_js_src, "pebble-js-app.js"),
+                      "w") as f:
                 f.write(FILE_DUMMY_JAVASCRIPT_SRC)
-
 
 
 FILE_GITIGNORE = """
@@ -184,30 +188,39 @@ Pebble.addEventListener("ready",
 );
 """
 
+
 class PebbleProjectException(Exception):
     pass
+
 
 class InvalidProjectException(PebbleProjectException):
     pass
 
+
 class OutdatedProjectException(PebbleProjectException):
     pass
 
-def check_project_directory():
-    """Check to see if the current directly matches what is created by PblProjectCreator.run.
 
-    Raises an InvalidProjectException or an OutdatedProjectException if everything isn't quite right.
+def check_project_directory():
+    """Check to see if the current directly matches what is created by
+    PblProjectCreator.run.
+
+    Raises an InvalidProjectException or an OutdatedProjectException if
+    everything isn't quite right.
     """
 
     if not os.path.isdir('src') or not os.path.exists('wscript'):
         raise InvalidProjectException
 
-    if os.path.islink('pebble_app.ld') or os.path.exists('resources/src/resource_map.json'):
+    if os.path.islink('pebble_app.ld') or os.path.exists(
+            'resources/src/resource_map.json'):
         raise OutdatedProjectException
+
 
 def requires_project_dir(func):
     def wrapper(self, args):
         check_project_directory()
         return func(self, args)
+
     return wrapper
 
