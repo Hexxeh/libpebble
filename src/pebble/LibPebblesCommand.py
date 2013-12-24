@@ -35,17 +35,25 @@ class AppTooBigException(Exception):
 class LibPebbleCommand(PblCommand):
     def configure_subparser(self, parser):
         PblCommand.configure_subparser(self, parser)
-        parser.add_argument('--phone', type=str, default=os.getenv(PEBBLE_PHONE_ENVVAR),
-                            help='The IP address or hostname of your phone - Can also be provided through PEBBLE_PHONE environment variable.')
-        parser.add_argument('--pebble_id', type=str, default=os.getenv(PEBBLE_ID_ENVVAR),
-                            help='Last 4 digits of the MAC address of your Pebble - Can also be provided through PEBBLE_ID environment variable.')
+        parser.add_argument('--phone', type=str,
+                            default=os.getenv(PEBBLE_PHONE_ENVVAR),
+                            help='The IP address or hostname of your phone - '
+                                 'Can also be provided through PEBBLE_PHONE '
+                                 'environment variable.')
+        parser.add_argument('--pebble_id', type=str,
+                            default=os.getenv(PEBBLE_ID_ENVVAR),
+                            help='Last 4 digits of the MAC address of your '
+                                 'Pebble - Can also be provided through '
+                                 'PEBBLE_ID environment variable.')
         parser.add_argument('--verbose', type=bool, default=False,
-                            help='Prints received system logs in addition to APP_LOG')
+                            help='Prints received system logs in '
+                                 'addition to APP_LOG')
 
     def run(self, args):
         if not args.phone and not args.pebble_id:
             raise ConfigurationException(
-                "Argument --phone or --pebble_id is required (Or set a PEBBLE_{PHONE,ID} environment variable)")
+                "Argument --phone or --pebble_id is required (Or set a "
+                "PEBBLE_{PHONE,ID} environment variable)")
         self.pebble = libpebble.Pebble()
         self.pebble.set_print_pbl_logs(args.verbose)
 
@@ -66,7 +74,8 @@ class LibPebbleCommand(PblCommand):
                 import readline
                 import rlcompleter
 
-                readline.set_completer(rlcompleter.Completer(locals()).complete)
+                readline.set_completer(
+                    rlcompleter.Completer(locals()).complete)
                 readline.parse_and_bind('tab:complete')
                 code.interact(local=locals())
 
@@ -102,17 +111,21 @@ class PblInstallCommand(LibPebbleCommand):
 
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
-        parser.add_argument('pbw_path', type=str, nargs='?', default=self.get_pbw_path(),
+        parser.add_argument('pbw_path', type=str, nargs='?',
+                            default=self.get_pbw_path(),
                             help='Path to the pbw to install (ie: build/*.pbw)')
         parser.add_argument('--launch', action='store_true',
-                            help='Launch on install (only works over Bluetooth connection)')
-        parser.add_argument('--logs', action='store_true', help='Display logs after installing the app')
+                            help='Launch on install (only works over Bluetooth'
+                                 ' connection)')
+        parser.add_argument('--logs', action='store_true',
+                            help='Display logs after installing the app')
 
     def run(self, args):
         LibPebbleCommand.run(self, args)
 
         if not os.path.exists(args.pbw_path):
-            logging.error("Could not find pbw <{}> for install.".format(args.pbw_path))
+            logging.error(
+                "Could not find pbw <{}> for install.".format(args.pbw_path))
             return 1
 
         self.pebble.app_log_enable()
@@ -133,13 +146,15 @@ class PblInstallFWCommand(LibPebbleCommand):
 
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
-        parser.add_argument('pbz_path', type=str, help='Path to the pbz to install')
+        parser.add_argument('pbz_path', type=str,
+                            help='Path to the pbz to install')
 
     def run(self, args):
         LibPebbleCommand.run(self, args)
 
         if not os.path.exists(args.pbz_path):
-            logging.error("Could not find pbz <{}> for install.".format(args.pbz_path))
+            logging.error(
+                "Could not find pbz <{}> for install.".format(args.pbz_path))
             return 1
 
         self.pebble.install_firmware(args.pbz_path)
@@ -176,14 +191,17 @@ class PblRemoteCommand(LibPebbleCommand):
 
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
-        parser.add_argument('app_name', type=str, help='Local application name to control')
+        parser.add_argument('app_name', type=str,
+                            help='Local application name to control')
 
     def do_oscacript(self, command):
-        cmd = "osascript -e 'tell application \"" + self.args.app_name + "\" to " + command + "'"
+        cmd = "osascript -e 'tell application \"" + self.args.app_name + \
+              "\" to " + command + "'"
         try:
             return subprocess.check_output(cmd, shell=True)
         except subprocess.CalledProcessError:
-            print "Failed to send message to " + self.args.app_name + ", is it running?"
+            print "Failed to send message to " + self.args.app_name + \
+                  ", is it running?"
             return False
 
     def music_control_handler(self, endpoint, resp):
@@ -211,7 +229,8 @@ class PblRemoteCommand(LibPebbleCommand):
         LibPebbleCommand.run(self, args)
         self.args = args
 
-        self.pebble.register_endpoint("MUSIC_CONTROL", self.music_control_handler)
+        self.pebble.register_endpoint("MUSIC_CONTROL",
+                                      self.music_control_handler)
 
         logging.info('Waiting for music control events...')
         try:
@@ -228,7 +247,9 @@ class PblRemoveCommand(LibPebbleCommand):
 
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
-        parser.add_argument('bank_id', type=int, help="The bank id of the app to remove (between 1 and 8)")
+        parser.add_argument('bank_id', type=int,
+                            help="The bank id of the app to remove (between 1 "
+                                 "and 8)")
 
     def run(self, args):
         LibPebbleCommand.run(self, args)
@@ -262,7 +283,8 @@ class PblCurrentAppCommand(LibPebbleCommand):
         d = self.pebble.describe_app_by_uuid(uuid_hex)
         if not isinstance(d, dict):
             return
-        print "Name: %s\nCompany: %s\nVersion: %d" % (d.get("name"), d.get("company"), d.get("version"))
+        print "Name: %s\nCompany: %s\nVersion: %d" % (
+        d.get("name"), d.get("company"), d.get("version"))
         return
 
 
@@ -306,7 +328,8 @@ class PblScreenshotCommand(LibPebbleCommand):
         # Open up the image in the user's default image viewer. For some
         # reason, this doesn't seem to open it up in their webbrowser,
         # unlike how it might appear. See
-        # http://stackoverflow.com/questions/7715501/pil-image-show-doesnt-work-on-windows-7
+        # http://stackoverflow.com/questions/7715501/pil-image-show-doesnt-
+        # work-on-windows-7
         try:
             import webbrowser
 
@@ -336,7 +359,8 @@ class PblLaunchApp(LibPebbleCommand):
     def configure_subparser(self, parser):
         LibPebbleCommand.configure_subparser(self, parser)
         parser.add_argument('app_uuid', type=int,
-                            help="a valid app UUID in the form of: 54D3008F0E46462C995C0D0B4E01148C")
+                            help="a valid app UUID in the form of: 54D3008F0E4"
+                                 "6462C995C0D0B4E01148C")
 
     def run(self, args):
         LibPebbleCommand.run(self, args)
@@ -345,7 +369,8 @@ class PblLaunchApp(LibPebbleCommand):
 
 class PblReplCommand(LibPebbleCommand):
     name = 'repl'
-    help = 'Launch an interactive python shell with a `pebble` object to execute methods on.'
+    help = 'Launch an interactive python shell with a `pebble` object to ' \
+           'execute methods on.'
 
     def run(self, args):
         LibPebbleCommand.run(self, args)

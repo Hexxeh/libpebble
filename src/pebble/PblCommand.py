@@ -9,7 +9,10 @@ class PblCommand:
         pass
 
     def configure_subparser(self, parser):
-        parser.add_argument('--sdk', help='Path to Pebble SDK (ie: ~/pebble-dev/PebbleSDK-2.X/)')
+        parser.add_argument(
+            '--sdk',
+            help='Path to Pebble SDK (ie: ~/pebble-dev/PebbleSDK-2.X/)'
+        )
 
     def sdk_path(self, args):
         """
@@ -19,4 +22,5 @@ class PblCommand:
         if args.sdk:
             return args.sdk
         else:
-            return os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            return os.path.normpath(
+                os.path.join(os.path.dirname(__file__), '..', '..'))

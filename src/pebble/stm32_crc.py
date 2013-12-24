@@ -4,7 +4,7 @@ CRC_POLY = 0x04C11DB7
 
 
 def process_word(data, crc=0xffffffff):
-    if (len(data) < 4):
+    if len(data) < 4:
         d_array = array.array('B', data)
         for x in range(0, 4 - len(data)):
             d_array.insert(0, 0)
@@ -26,7 +26,7 @@ def process_word(data, crc=0xffffffff):
 
 def process_buffer(buf, c=0xffffffff):
     word_count = len(buf) / 4
-    if (len(buf) % 4 != 0):
+    if len(buf) % 4 != 0:
         word_count += 1
 
     crc = c

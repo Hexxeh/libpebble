@@ -1,4 +1,5 @@
 import errno
+import os
 import sys
 import logging
 from struct import unpack
@@ -24,7 +25,8 @@ class WebSocketPebble(WebSocket):
 
 ######## libPebble Bridge Methods #########
 
-    def write(self, payload, opcode=ABNF.OPCODE_BINARY, ws_cmd=WS_CMD_PHONE_TO_WATCH):
+    def write(self, payload, opcode=ABNF.OPCODE_BINARY,
+              ws_cmd=WS_CMD_PHONE_TO_WATCH):
         """
         BRIDGES THIS METHOD:
         def write(self, message):
@@ -63,20 +65,20 @@ class WebSocketPebble(WebSocket):
                 if self.debug_protocol:
                     log.debug("LightBlue process has shutdown (queue read)")
                 return (None, None, '')
-                
+
         NOTE: The return value of this method was modified from 3 tuples to
         4 tuples in order to support multiple possible WS_CMD id's besides
         just WS_CMD_WATCH_TO_PHONE and WS_CMD_STATUS. Now, the first item in
         the tuple (source) identifies which WS_CMD we received. The other
         transports (LightBlue, etc.), if/when they are re-instantiated into
-        active use will have to be updated to return this new 4 item tuple. 
-                
+        active use will have to be updated to return this new 4 item tuple.
+
         retval:   (source, topic, response, data)
             source can be either 'ws' or 'watch'
             if source is 'watch', then topic is the endpoint identifier
             if source is 'ws', then topic is either 'status','phoneInfo',
                     or 'log'
-            
+
         """
         opcode, data = self.recv_data()
         ws_cmd = unpack('!b', data[0])
@@ -84,35 +86,35 @@ class WebSocketPebble(WebSocket):
             logging.debug("Server: %s" % repr(data[1:]))
         if ws_cmd[0] == WS_CMD_PHONE_APP_LOG:
             logging.debug("Log: %s" % repr(data[1:]))
-            return ('ws', 'log', data[1:], data)
+            return 'ws', 'log', data[1:], data
         if ws_cmd[0] == WS_CMD_PHONE_TO_WATCH:
             logging.debug("Phone ==> Watch: %s" % data[1:].encode("hex"))
         if ws_cmd[0] == WS_CMD_WATCH_TO_PHONE:
             logging.debug("Watch ==> Phone: %s" % data[1:].encode("hex"))
             size, endpoint = unpack("!HH", data[1:5])
             resp = data[5:]
-            return ('watch', endpoint, resp, data[1:5])
+            return 'watch', endpoint, resp, data[1:5]
         if ws_cmd[0] == WS_CMD_STATUS:
             logging.debug("Status: %s" % repr(data[1:]))
             status = unpack("I", data[1:5])[0]
-            return ('ws', 'status', status, data[1:5])
+            return 'ws', 'status', status, data[1:5]
         if ws_cmd[0] == WS_CMD_PHONE_INFO:
             logging.debug("Phone info: %s" % repr(data[1:]))
             response = data[1:]
-            return ('ws', 'phoneInfo', response, data)
+            return 'ws', 'phoneInfo', response, data
         else:
-            return (None, None, None, data)
+            return None, None, None, data
 
 
-######################################
-
-def create_connection(host, port=9000, timeout=None, connect_timeout=None, **options):
+def create_connection(host, port=9000, timeout=None, connect_timeout=None,
+                      **options):
     """
     connect to ws://host:port and return websocket object.
 
     Connect to ws://host:port and return the WebSocket object.
     Passing optional timeout parameter will set the timeout on the socket.
-    If no timeout is supplied, the global default timeout setting returned by getdefauttimeout() is used.
+    If no timeout is supplied, the global default timeout setting returned by
+    getdefauttimeout() is used.
     You can customize using 'options'.
     If you set "header" dict object, you can set your own custom header.
 
@@ -122,33 +124,42 @@ def create_connection(host, port=9000, timeout=None, connect_timeout=None, **opt
 
 
     timeout: socket timeout time. This value is integer.
-             if you set None for this value, it means "use default_timeout value"
+             if you set None for this value, it means "use default_timeout
+             value"
 
     options: current support option is only "header".
-             if you set header as dict value, the custom HTTP headers are added.
+             if you set header as dict value, the custom HTTP headers are
+             added.
     """
 
     url = "ws://{}:{}".format(host, port)
     try:
         sockopt = options.get("sockopt", ())
         websock = WebSocketPebble(sockopt=sockopt)
-        websock.settimeout(connect_timeout is not None and connect_timeout or default_timeout)
+        websock.settimeout(
+            connect_timeout is not None and connect_timeout or default_timeout)
         websock.connect(url, **options)
         websock.settimeout(timeout is not None and timeout or default_timeout)
+
+        return websock
     except socket.timeout as e:
-        logging.error("Could not connect to phone at {}:{}. Connection timed out".format(host, port))
+        logging.error(
+            "Could not connect to phone at {}:{}. Connection timed out".format(
+                host, port))
         os._exit(-1)
     except socket.error as e:
         if e.errno == errno.ECONNREFUSED:
             logging.error("Could not connect to phone at {}:{}. "
-                          "Ensure that 'Developer Connection' is enabled in the Pebble app.".format(host, port))
+                          "Ensure that 'Developer Connection' is enabled in "
+                          "the Pebble app.".format(host, port))
             os._exit(-1)
         else:
             raise e
     except WebSocketConnectionClosedException as e:
-        logging.error("Connection was rejected. The Pebble app is already connected to another client.")
+        logging.error(
+            "Connection was rejected. The Pebble app is already connected to "
+            "another client.")
         os._exit(-1)
-    return websock
 
 
 _MAX_INTEGER = (1 << 32) - 1

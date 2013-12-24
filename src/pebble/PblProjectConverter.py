@@ -22,7 +22,8 @@ def read_c_code(c_file_path):
 
 def convert_c_uuid(c_uuid):
     C_UUID_BYTE_PATTERN = '0x([0-9A-Fa-f]{2})'
-    C_UUID_PATTERN = '^{\s*' + '\s*,\s*'.join([C_UUID_BYTE_PATTERN] * 16) + '\s*}$'
+    C_UUID_PATTERN = '^{\s*' + '\s*,\s*'.join(
+        [C_UUID_BYTE_PATTERN] * 16) + '\s*}$'
 
     UUID_FORMAT = "{}{}{}{}-{}{}-{}{}-{}{}-{}{}{}{}{}{}"
 
@@ -33,16 +34,24 @@ def convert_c_uuid(c_uuid):
         return c_uuid
 
 
-def extract_c_macros_from_code(c_code, macros={}):
+def extract_c_macros_from_code(c_code, macros=None):
+
+    if not macros:
+        macros = {}
+
     C_IDENTIFIER_PATTERN = '[A-Za-z_]\w*'
-    C_DEFINE_PATTERN = '#define\s+(' + C_IDENTIFIER_PATTERN + ')\s+\(*(.+)\)*\s*'
+    C_DEFINE_PATTERN = '#define\s+(%s)\s+\(*(.+)\)*\s*' % C_IDENTIFIER_PATTERN
 
     for m in re.finditer(C_DEFINE_PATTERN, c_code):
         groups = m.groups()
         macros[groups[0]] = groups[1].strip()
 
 
-def extract_c_macros_from_project(project_root, macros={}):
+def extract_c_macros_from_project(project_root, macros=None):
+
+    if not macros:
+        macros = {}
+
     src_path = os.path.join(project_root, 'src')
     for root, dirnames, filenames in os.walk(src_path):
         for f in filenames:
@@ -57,7 +66,7 @@ def convert_c_expr_dict(c_expr_dict, project_root):
 
     macros = extract_c_macros_from_project(project_root)
     for k, v in c_expr_dict.iteritems():
-        if v == None:
+        if not v:
             continue
 
         # Expand C macros
@@ -134,7 +143,9 @@ def load_app_keys(js_appinfo_path):
         try:
             app_keys = json.load(f)['app_keys']
         except:
-            raise Exception("Failed to import app_keys from {} into new appinfo.json".format(js_appinfo_path))
+            raise Exception(
+                "Failed to import app_keys from {} into new appinfo.json"
+                "".format(js_appinfo_path))
 
         app_keys = json.dumps(app_keys, indent=2)
         return re.sub('\s*\n', '\n  ', app_keys)
@@ -151,7 +162,8 @@ def load_resources_map(resources_map_path, menu_icon_name=None):
             del item['defName']
             item['name'] = item_name
 
-            if menu_icon_name and C_RESOURCE_PREFIX + item_name == menu_icon_name:
+            if menu_icon_name and C_RESOURCE_PREFIX + item_name == \
+                    menu_icon_name:
                 item['menuIcon'] = True
 
             return item
@@ -160,14 +172,18 @@ def load_resources_map(resources_map_path, menu_icon_name=None):
         try:
             resources_media = json.load(f)['media']
         except:
-            raise Exception("Failed to import {} into appinfo.json".format(resources_map_path))
+            raise Exception("Failed to import {} into appinfo.json".format(
+                resources_map_path))
 
-        resources_media = filter(None, [convert_resources_media_item(item) for item in resources_media])
+        resources_media = filter(None,
+                                 [convert_resources_media_item(item) for item
+                                  in resources_media])
         resources_media = json.dumps(resources_media, indent=2)
         return re.sub('\s*\n', '\n    ', resources_media)
 
 
-def generate_appinfo_from_old_project(project_root, js_appinfo_path=None, resources_media_path=None):
+def generate_appinfo_from_old_project(project_root, js_appinfo_path=None,
+                                      resources_media_path=None):
     appinfo_json_def = extract_c_appinfo(project_root)
 
     if js_appinfo_path and os.path.exists(js_appinfo_path):
@@ -175,7 +191,8 @@ def generate_appinfo_from_old_project(project_root, js_appinfo_path=None, resour
 
     if resources_media_path and os.path.exists(resources_media_path):
         menu_icon_name = appinfo_json_def['menu_icon']
-        appinfo_json_def['resources_media'] = load_resources_map(resources_media_path, menu_icon_name)
+        appinfo_json_def['resources_media'] = load_resources_map(
+            resources_media_path, menu_icon_name)
 
     with open(os.path.join(project_root, "appinfo.json"), "w") as f:
         f.write(FILE_DUMMY_APPINFO.substitute(**appinfo_json_def))
@@ -187,7 +204,9 @@ def convert_project():
     js_appinfo_path = os.path.join(project_root, 'src/js/appinfo.json')
 
     resources_path = 'resources/src'
-    resources_media_path = os.path.join(project_root, os.path.join(resources_path, 'resource_map.json'))
+    resources_media_path = os.path.join(project_root,
+                                        os.path.join(resources_path,
+                                                     'resource_map.json'))
 
     generate_appinfo_from_old_project(
         project_root,
@@ -228,17 +247,21 @@ def convert_project():
     if os.path.exists(resources_path):
         try:
             for f in os.listdir(resources_path):
-                shutil.move(os.path.join(resources_path, f), os.path.join('resources', f))
+                shutil.move(os.path.join(resources_path, f),
+                            os.path.join('resources', f))
             os.rmdir(resources_path)
         except:
-            raise Exception("Could not move all files in {} up one level".format(resources_path))
+            raise Exception(
+                "Could not move all files in {} up one level".format(
+                    resources_path))
 
 
 class PblProjectConverter(PblCommand):
     name = 'convert-project'
     help = """convert an existing Pebble project to the current SDK.
 
-Note: This will only convert the project, you'll still have to update your source to match the new APIs."""
+Note: This will only convert the project, you'll still have to update your
+source to match the new APIs."""
 
     def run(self, args):
         try:
