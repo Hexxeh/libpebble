@@ -26,6 +26,7 @@ Installing Lightblue-0.4 in Ubuntu requires some extra dependencies be installed
 * `python-dev`
 * `libopenobex1-dev`
 * `python-tk` if you wish to use the GUI selection tool
+* `python-bluez`
 
 ###c. Debian Additional Dependencies
 
