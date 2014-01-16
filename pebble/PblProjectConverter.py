@@ -85,7 +85,7 @@ def find_pbl_app_info(project_root):
 
     PBL_APP_INFO_FIELDS = [
             'uuid',
-            'name',
+            'project_name',
             'company_name',
             'version_major',
             'version_minor',
@@ -114,8 +114,7 @@ def extract_c_appinfo(project_root):
 
     appinfo_json_def = {
         'uuid': convert_c_uuid(appinfo_c_def['uuid']),
-        'short_name': appinfo_c_def['name'],
-        'long_name': appinfo_c_def['name'],
+        'project_name': appinfo_c_def['project_name'],
         'company_name': appinfo_c_def['company_name'],
         'version_code': version_major,
         'version_label': '{}.{}.0'.format(version_major, version_minor),
