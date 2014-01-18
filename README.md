@@ -1,5 +1,8 @@
-libpebble
-=========
+Libpebble:Controlling Spotify or iTunes on OS X using your Pebble 
+Please Note this is not the actual libpebble, only a fork of it. 
+
+========L
+:ibpebble Documentation
 Interact with your Pebble from OSX, Ubuntu or Debian operating systems.
 
 ## Warning and Complications
