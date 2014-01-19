@@ -43,7 +43,7 @@ class WebSocketPebble(WebSocket):
 
         sent = 0
         while sent < len(data):
-            sent += self.io_sock.send(data[sent:])
+            sent += self.sock.send(data[sent:])
             if traceEnabled:
                 logging.debug('send>>> ' + data.encode('hex'))
 
