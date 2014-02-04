@@ -17,8 +17,11 @@ All supported OSes will require `python 2.7` to operate libpebble. It can be ins
 ###a. OSX Additional Dependencies
 
 Installing Lightblue-0.4 in OSX will require the following be installed:
-* `PyObjC` which can be installed via [pip](https://pypi.python.org/pypi/pip)
 * `Xcode 2.1 or later` to build LightAquaBlue framework
+* Run setup_lightblue.bash as root, `sudo setup_lightblue.bash`. It installs:
+** `PyObjC` 
+** `PySerial` 
+** `lightblue-0.4`
 
 ###b. Ubuntu Additional Dependencies
 
